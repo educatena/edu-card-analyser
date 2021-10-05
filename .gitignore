@@ -4,3 +4,5 @@ build
 *.png
 *.jpg
 *.bmp
+__pycache__
+*.egg-info
