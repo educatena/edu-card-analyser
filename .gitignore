@@ -6,3 +6,4 @@ build
 *.bmp
 __pycache__
 *.egg-info
+*.whl
