@@ -1,5 +1,9 @@
 import cv2
 import numpy
+import random
+import math
+import collections
+from matplotlib import pyplot as plt
 
 """
 BaseSheet represents and collects
@@ -14,8 +18,8 @@ class BaseSheet:
     BLUR_SIGMA_X = 0
     
     # Canny (used for edge detection) parameters
-    CANNY_1ST_THRESHOLD = 20
-    CANNY_2ND_THRESHOLD = 15
+    CANNY_1ST_THRESHOLD = 1
+    CANNY_2ND_THRESHOLD = 2
 
     # Contour parameters
     CONTOUR_MODE = cv2.RETR_EXTERNAL
@@ -23,6 +27,9 @@ class BaseSheet:
 
     # Source untouched image
     source = None
+
+    sourceWidth = None
+    sourceHeight = None
 
     # Image prepared to be fed into the edge detection algorithm
     edged = None
@@ -32,16 +39,29 @@ class BaseSheet:
     
     def __init__(self, image) -> None:
         self.source = image
+        self.sourceWidth = self.source.shape[1]
+        self.sourceHeight = self.source.shape[0]
+
+        self.BLUR_KERNEL_SIZE = self.getAverageBlurKernel(400)
+
         self.edged = self.blackWhiteEdgeImage(image)
         self.contours = self.findContours()
+    
+    def getAverageBlurKernel(self, imageRatio=100):
+        imageAverageSide = math.floor((self.sourceWidth + self.sourceHeight) / 2)
+        kernelSize = math.floor(imageAverageSide / imageRatio)
+        if ((kernelSize % 2) == 0): kernelSize += 1
+
+        return ( int(kernelSize), int(kernelSize))
 
     # Grayscales, blurs a little bit then uses canny on the image to prepare it
     # on how the contour detection algorithm needs.
     def blackWhiteEdgeImage(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, self.BLUR_KERNEL_SIZE, self.BLUR_SIGMA_X)
-        edged = cv2.Canny(blurred, self.CANNY_1ST_THRESHOLD, self.CANNY_2ND_THRESHOLD)
-        return edged
+        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+        # edged = cv2.Canny(thresh, self.CANNY_1ST_THRESHOLD, self.CANNY_2ND_THRESHOLD)
+        return thresholded
 
     def findContours(self):
 
@@ -56,6 +76,14 @@ class BaseSheet:
 
         return contours
 
+    def getSquareContourHeight(self, contour):
+        y1 = contour[0][0, 1]
+        y2 = contour[1][0, 1]
+
+        height = abs(y1 - y2)
+
+        return height
+
     # Uses a contour to get an image 'slice' of that contour area.
     def getSubImage(self, source, contour):
         x1 = contour[0][0, 0]
@@ -65,41 +93,106 @@ class BaseSheet:
         return source[y1:y2, x1:x2]
 
     # Takes image_contours and extract squares from image whose y/x ratios are above ratio_threshold
-    def findSquares(self, image_contours, image, ratio_threshold = 3.0):
-        squares = []
+    def findSquares(self, image_contours, image):
+        random.seed()
+
+        squaresByHeight = {}
+        biggestHeight = 0
+
         for contour in image_contours:
             perimeter = 0.02 * cv2.arcLength(contour, True)
             approximate = cv2.approxPolyDP(contour, perimeter, True)
+
             if len(approximate) == 4:
-                slice = self.getSubImage(image, approximate)
+                # We round the height so we have some pixel tolerance for very similar contour heights
+                height = numpy.around(self.getSquareContourHeight(approximate), -1)
 
-                y = slice.shape[0] or 1
-                x = slice.shape[1] or 1
-                ratio = y / x
+                if (height > biggestHeight): biggestHeight = height
 
-                if (ratio > ratio_threshold and slice.size != 0):
-                    squares.append(slice)
+                if not height in squaresByHeight:
+                    squaresByHeight[height] = []
+
+                squaresByHeight[height].append(approximate)
+
+        squares = {}
+        for contour in squaresByHeight[biggestHeight]:
+            slice = self.getSubImage(image, contour)
+            y = slice.shape[0] or 1
+            x = slice.shape[1] or 1
+
+            if (slice.size != 0):
+                squares[contour[0][0,0]] = slice
+        
         return squares
+
+    def closest(self, lst, K):
+        lst = numpy.asarray(lst)
+        idx = (numpy.abs(lst - K)).argmin()
+        return lst[idx]
+
+    def yAxisPool(self, circles, deltaDeviation):
+        yAxis = numpy.unique(circles[:,1])
+
+        lastY = 0
+        for i, y in enumerate(yAxis):
+            if (i == 0): lastY = y
+            delta = abs(y - lastY)
+            if (delta <= deltaDeviation):
+                yAxis[i] = lastY
+            else:
+                lastY = y
+
+        yAxis = sorted(list(set(yAxis)))
+
+        return yAxis
+
+    def snappedYs(self, coordinates, deviation=20):
+        yAxisPool = numpy.array(self.yAxisPool(coordinates, deviation))
+        
+        for coordinate in coordinates:
+            originalY = coordinate[1]
+            nearY = self.closest(yAxisPool, originalY)
+            # print(f'original: {originalY} \t\t near: {nearY}')
+        
+        x = numpy.subtract.outer(coordinates[:,1], yAxisPool)
+
+        y = numpy.argmin(abs(x), axis=1)
+        
+        return yAxisPool[y]
 
     # Detects circles on image
     def findCircles(self, image):
+        random.seed()
         # TO DO: Extract parameters to either class constants or method parameters.
 
         # Every circle is appended to this list
         result = []
+        x = image.shape[1] or 1
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.medianBlur(gray, self.getAverageBlurKernel(600)[0])
+        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+
+        # 350 625 50
+        param1 = int( 350 - (x/625 * 50) ) # I have no idea what this parameter is yet, lets mess around with it
+        # 35 625 10
+        param2 = int( 35 + (x/625 * 10) ) # Smaller values means possibly detecting more false circles
+
+        # 0.12
+        maxDiameter = int(x * 0.12) #9 # Maximum circle diameter
+        # 0.8
+        minDiameter = int(0.8 * maxDiameter) # Minimum circle diamenter
+
+        maxRadius = math.ceil(maxDiameter / 2)
+        minRadius = math.ceil(minDiameter / 2)
         
-        minDist = 5 # Minimum distance between each circle center.
-        param1 = 500 # I have no idea what this parameter is yet, lets mess around with it
-        param2 = 30 # Smaller values means possibly detecting more false circles
-        minRadius = 7 # Minimum circle radius
-        maxRadius = 9 # Maximum circle radius
+        # 0.032
+        minDist = (minRadius * 2 + math.floor(x * 0.032)) # Minimum distance between each circle center.
 
         # Adjusting minRadius, maxRadius, param2 and minDist seems to yield more detections if done right.
 
         circles = cv2.HoughCircles(
-            gray,
+            thresholded,
             cv2.HOUGH_GRADIENT,
             2,
             minDist,
@@ -109,28 +202,108 @@ class BaseSheet:
             maxRadius=maxRadius
         )
 
-        if circles is not None:
-            circles = numpy.uint16(numpy.around(circles))
+        circled = image.copy()
 
-            for i in circles[0,:]:
-                result.append(i)
+        if circles is not None:
+            circles = numpy.uint16(
+                numpy.fix(circles / (1,10,1)) * (1,10,1)
+            )
+
+            #PARAM 20 = ySnapTolerate
+            snappedYs = self.snappedYs(circles[0], 20)
+
+            for i, circle in enumerate(circles[0]):
+                circles[0][i,1] = snappedYs[i]
+
+            circlesSorted = sorted(circles[0], key=lambda v: [v[1], v[0]])
+
+            for i, circle in enumerate(circlesSorted):
+
+                radius = circle[2]
+                centerX = circle[0]
+                centerY = circle[1]
+
+                x1 = centerX - radius
+                y1 = centerY - radius
+                x2 = centerX + radius
+                y2 = centerY + radius
+
+                # print(f'CI {i} COORDINATES x: {centerX} y: {centerY}')
+
+                slice = gray[y1:y2, x1:x2]
+
+                circleHistogram = cv2.calcHist([slice], [0], None, [2], [0,256])
+
+                darks = circleHistogram[0,0]
+                brights = circleHistogram[1,0]
+                totals = darks + brights
+
+                # print(f'CI {i} Percents {darks/totals * 100}%')
+
+                marked = darks > int(0.30 * totals)
+
+                result.append('X' if marked else 'O')
+
+                # cv2.imshow('circle', slice)
+                # cv2.waitKey()
 
                 # Below is temporary code to draw on the source image for us
                 # to draw detected circles in the source image.
+                # print(i[2])
 
                 # draw the outer circle
-                cv2.circle(gray,(i[0],i[1]),i[2],(0,255,0),2)
+                cv2.circle(circled,(centerX,centerY),circle[2],(0,255,0),1)
                 # draw the center of the circle
-                cv2.circle(gray,(i[0],i[1]),2,(0,0,255),3)
+                cv2.circle(circled,(centerX,centerY),2,(0,0,255),3)
+
+                font                   = cv2.FONT_HERSHEY_SIMPLEX
+                fontScale              = 1
+                fontColor              = (0,0,0)
+                lineType               = 1
+
+                cv2.putText(circled,str(i), 
+                    (centerX,centerY+20), 
+                    font,
+                    fontScale,
+                    fontColor,
+                    thickness=2
+                )
+                
+                cv2.putText(circled,f'X' if marked else f'O', 
+                    (centerX,centerY), 
+                    font,
+                    1,
+                    (255,20,147),
+                    thickness=5
+                )
+
 
         # Renders the image on a window called 'circles'
         # If no circles were found, you wont see any...
-        cv2.imshow('circles', gray)
+
+        circledWidth = circled.shape[1]
+        circledHeight = circled.shape[0]
+        downCircled = cv2.resize(circled, (math.floor(circledWidth/3), math.floor(circledHeight/3)) )
+
+        # cv2.imshow(f'circles {x} ({random.randint(1,9999)})', downCircled)
 
         # Makes the previous window await a key before continuing execution.
         # If the window is showing up then disappearing try setting a breakpoint
         # on this function's return statement.
-        cv2.waitKey()
+        # cv2.waitKey()
 
-        return result
+        # result = numpy.array(result, dtype=None, ndmin=1)
+
+        questions = []
+        question = []
+        for option in result:
+            question.append(option)
+            if (len(question) == 5):
+                questions.append(question)
+                question = []
+
+        # if (result.shape[0] == 100):
+        #     result = numpy.reshape(result, (20,5), order='A')
+
+        return questions
     
