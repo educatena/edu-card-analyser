@@ -1,71 +1,109 @@
-import cv2
+import numpy
 from edu_card_models.BaseSheet import BaseSheet
+from operator import itemgetter
 
+FIRST_CONTOUR_X = 0,0,0
+PANEL_KEY = lambda contour: contour[FIRST_CONTOUR_X]
+PANEL_BLUR_RATIO = 600
+OPTION_PER_QUESTION = 5
+QUESTION_PER_PANEL = 20
+NUMBERING_FUNCTION = lambda panel, question: (question + 1) + (QUESTION_PER_PANEL * panel) - QUESTION_PER_PANEL
 
 class SheetV1(BaseSheet):
-    zones = None
+    panels = None
     questions = None
+    studentNumber = None
+    squares = None
 
     def __init__(self, image) -> None:
         super().__init__(image)
-        self.zones = self.getQuestionZones()
-        self.questions = self.getQuestions(20)
+        (self.panels, self.squares) = self.getTallestSquares()
+        self.questions = self.getQuestions()
+        self.studentNumber = self.getStudentNumber()
 
-    def getQuestionZones(self):
-        zones = self.findSquares(self.contours, self.source)
+    def getTallestSquares(self):
+        (zones, tallest) = self.findSquares(self.contours, self.source)
 
-        return zones
+        tallestZones = {}
+        for contour in zones[tallest]:
+            slice = self.getSubImage(self.source, contour)
+            y = slice.shape[0] or 1
+            x = slice.shape[1] or 1
+
+            if (slice.size != 0):
+                tallestZones[PANEL_KEY(contour)] = slice
+
+        return (tallestZones, zones)
     
-    def getQuestions(self, perPanel):
+    def getQuestions(self):
         numberedQuestions = {}
-        if len(self.zones) != 0:
+        if len(self.panels) != 0:
             multiplier = 1
-            for x in sorted(list(self.zones)):
+            for x in sorted(list(self.panels)):
+                image = self.panels[x]
+                
+                threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(image, PANEL_BLUR_RATIO))
 
-                circles = self.findCircles(self.zones[x])
-                circleMarks = self.readCircles(self.zones[x], circles)
-                questions = self.getQuestionMatrix(5, circleMarks)
+                circles = self.findCircles(threshold, 2, 625, 0.032, 0.12)
+                circleMarks = self.readCircles(gray, circles)
+                questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
 
                 for i, question in enumerate(questions):
-                    numberedQuestions[(i + 1) + (perPanel * multiplier) - perPanel] = question
+                    numberedQuestions[NUMBERING_FUNCTION(multiplier, i)] = question
                 multiplier += 1
         
         return numberedQuestions
 
-    def getQuestionMatrix(self, option_per_question, optionArray):
+    def circleMatrix(self, per_row, circlesArray):
         questions = []
         question = []
-        for option in optionArray:
+        for option in circlesArray:
             question.append(option)
-            if (len(question) == option_per_question):
+            if (len(question) == per_row):
                 questions.append(question)
                 question = []
         return questions
-    
-    def readCircles(self, sourceImage, circles):
-        result = []
 
-        for i, circle in enumerate(circles):
+    def getStudentNumber(self):
+        whichSquare = list(self.squares)[1]
+        square = self.squares[whichSquare][0]
+        slice = self.getSubImage(self.source, square)
 
-            radius = circle[2]
-            centerX = circle[0]
-            centerY = circle[1]
+        REF_WIDTH = 762
+        DIST_RATIO = 0.02
+        DIAMETER_RATIO = 72 / 762
+        MIN_DIAMETER_RATIO = 0.5
 
-            x1 = centerX - radius
-            y1 = centerY - radius
-            x2 = centerX + radius
-            y2 = centerY + radius
+        threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(slice, 600))
+        circles = self.findCircles(
+            threshold,
+            1,
+            REF_WIDTH,
+            DIST_RATIO,
+            DIAMETER_RATIO,
+            min_diameter=MIN_DIAMETER_RATIO,
+            p2_base=30,
+            p2_grow=-8
+        )
+        marks = self.readCircles(gray, circles)
+        marksFound = len(marks)
 
-            slice = sourceImage[y1:y2, x1:x2]
-
-            circleHistogram = cv2.calcHist([slice], [0], None, [2], [0,256])
-
-            darks = circleHistogram[0,0]
-            brights = circleHistogram[1,0]
-            totals = darks + brights
-
-            marked = darks > int(0.30 * totals)
-
-            result.append('X' if marked else 'O')
-        
-        return result
+        if (marksFound == 90):
+            markMatrix = self.circleMatrix(9, marks)
+            places = [None, None, None, None, None, None, None, None, None]
+            for i, markRow in enumerate(markMatrix):
+                for mark_place, mark in enumerate(markRow):
+                    if mark == 'O':
+                        continue
+                    else:
+                        if (places[mark_place] == None): places[mark_place] = 0
+                        places[mark_place] = places[mark_place] + (i+1)
+                    
+            convert = lambda x: 'X' if x is None else str(x)
+            number = ''
+            number = number.join([
+                convert(e) for e in places
+            ])
+            return number
+        else:
+            raise Exception('Não consegui encontrar todos os círculos no quadro de número do aluno.')

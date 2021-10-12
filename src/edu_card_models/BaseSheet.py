@@ -5,6 +5,27 @@ import math
 import collections
 from matplotlib import pyplot as plt
 
+# Gaussian blur constants
+BLUR_KERNEL_RATIO = 400
+BLUR_SIGMA_X = 0
+
+# Contour constants
+CONTOUR_MODE = cv2.RETR_EXTERNAL
+CONTOUR_METHOD = cv2.CHAIN_APPROX_SIMPLE
+PERIMETER_ARC = 0.02
+CONTOUR_VERTEX_Y = 0,1
+CONTOUR_VERTEX_X = 0,0
+
+# Contour Height constants
+CONTOUR_FIRST_VERTEX = 0
+CONTOUR_SECOND_VERTEX = 1
+CONTOUR_HEIGHT_ROUND = -1
+
+# Read Circle constants
+MARK_PERCENT = 0.30
+MARKED = 'X'
+NOT_MARKED = 'O'
+
 """
 BaseSheet represents and collects
 basic methods used with computer vision to initiliaze
@@ -13,23 +34,13 @@ and find some primitive structures in the image.
 
 class BaseSheet:
 
-    # Gaussian blur parameters
-    BLUR_KERNEL_SIZE = (3, 3)
-    BLUR_SIGMA_X = 0
-    
-    # Canny (used for edge detection) parameters
-    CANNY_1ST_THRESHOLD = 1
-    CANNY_2ND_THRESHOLD = 2
-
-    # Contour parameters
-    CONTOUR_MODE = cv2.RETR_EXTERNAL
-    CONTOUR_METHOD = cv2.CHAIN_APPROX_SIMPLE
-
     # Source untouched image
     source = None
 
     sourceWidth = None
     sourceHeight = None
+
+    source_blur_kernel = None
 
     # Image prepared to be fed into the edge detection algorithm
     edged = None
@@ -42,7 +53,7 @@ class BaseSheet:
         self.sourceWidth = self.source.shape[1]
         self.sourceHeight = self.source.shape[0]
 
-        self.BLUR_KERNEL_SIZE = self.getAverageBlurKernel(400)
+        self.source_blur_kernel = self.getAverageBlurKernel(BLUR_KERNEL_RATIO)
 
         self.edged = self.blackWhiteEdgeImage(image)
         self.contours = self.findContours()
@@ -54,21 +65,20 @@ class BaseSheet:
 
         return ( int(kernelSize), int(kernelSize))
 
-    # Grayscales, blurs a little bit then uses canny on the image to prepare it
+    # Grayscales, blurs a little bit then uses threshold on the image to prepare it
     # on how the contour detection algorithm needs.
     def blackWhiteEdgeImage(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, self.BLUR_KERNEL_SIZE, self.BLUR_SIGMA_X)
+        blurred = cv2.GaussianBlur(gray, self.source_blur_kernel, BLUR_SIGMA_X)
         thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-        # edged = cv2.Canny(thresh, self.CANNY_1ST_THRESHOLD, self.CANNY_2ND_THRESHOLD)
         return thresholded
 
     def findContours(self):
 
         contours = cv2.findContours(
             self.edged.copy(),
-            self.CONTOUR_MODE,
-            self.CONTOUR_METHOD
+            CONTOUR_MODE,
+            CONTOUR_METHOD
         )[0]
 
         if contours is not None and len(contours) > 0:
@@ -77,8 +87,8 @@ class BaseSheet:
         return contours
 
     def getSquareContourHeight(self, contour):
-        y1 = contour[0][0, 1]
-        y2 = contour[1][0, 1]
+        y1 = contour[CONTOUR_FIRST_VERTEX][CONTOUR_VERTEX_Y]
+        y2 = contour[CONTOUR_SECOND_VERTEX][CONTOUR_VERTEX_Y]
 
         height = abs(y1 - y2)
 
@@ -86,10 +96,10 @@ class BaseSheet:
 
     # Uses a contour to get an image 'slice' of that contour area.
     def getSubImage(self, source, contour):
-        x1 = contour[0][0, 0]
-        y1 = contour[0][0, 1]
-        x2 = contour[2][0, 0]
-        y2 = contour[2][0, 1]
+        x1 = contour[0][CONTOUR_VERTEX_X]
+        y1 = contour[0][CONTOUR_VERTEX_Y]
+        x2 = contour[2][CONTOUR_VERTEX_X]
+        y2 = contour[2][CONTOUR_VERTEX_Y]
         return source[y1:y2, x1:x2]
 
     # Takes image_contours and extract squares from image whose y/x ratios are above ratio_threshold
@@ -100,12 +110,12 @@ class BaseSheet:
         biggestHeight = 0
 
         for contour in image_contours:
-            perimeter = 0.02 * cv2.arcLength(contour, True)
+            perimeter = PERIMETER_ARC * cv2.arcLength(contour, True)
             approximate = cv2.approxPolyDP(contour, perimeter, True)
 
             if len(approximate) == 4:
                 # We round the height so we have some pixel tolerance for very similar contour heights
-                height = numpy.around(self.getSquareContourHeight(approximate), -1)
+                height = numpy.around(self.getSquareContourHeight(approximate), CONTOUR_HEIGHT_ROUND)
 
                 if (height > biggestHeight): biggestHeight = height
 
@@ -114,16 +124,7 @@ class BaseSheet:
 
                 squaresByHeight[height].append(approximate)
 
-        squares = {}
-        for contour in squaresByHeight[biggestHeight]:
-            slice = self.getSubImage(image, contour)
-            y = slice.shape[0] or 1
-            x = slice.shape[1] or 1
-
-            if (slice.size != 0):
-                squares[contour[0][0,0]] = slice
-        
-        return squares
+        return (squaresByHeight, biggestHeight)
 
     def closest(self, lst, K):
         lst = numpy.asarray(lst)
@@ -149,11 +150,6 @@ class BaseSheet:
     def snappedYs(self, coordinates, deviation=20):
         yAxisPool = numpy.array(self.yAxisPool(coordinates, deviation))
         
-        for coordinate in coordinates:
-            originalY = coordinate[1]
-            nearY = self.closest(yAxisPool, originalY)
-            # print(f'original: {originalY} \t\t near: {nearY}')
-        
         x = numpy.subtract.outer(coordinates[:,1], yAxisPool)
 
         y = numpy.argmin(abs(x), axis=1)
@@ -161,36 +157,32 @@ class BaseSheet:
         return yAxisPool[y]
 
     # Detects circles on image
-    def findCircles(self, image):
+    def findCircles(self, image, dp, ref_width, distance_ratio, diameter_ratio, y_snap=20, min_diameter=0.8, p1_base=350, p1_grow=50, p2_base=35, p2_grow=-10):
         # TO DO: Extract parameters to either class constants or method parameters.
         x = image.shape[1] or 1
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.medianBlur(gray, self.getAverageBlurKernel(600)[0])
-        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-
         # 350 625 50
-        param1 = int( 350 - (x/625 * 50) ) # I have no idea what this parameter is yet, lets mess around with it
+        param1 = int( p1_base - (x/ref_width * p1_grow) ) # I have no idea what this parameter is yet, lets mess around with it
         # 35 625 10
-        param2 = int( 35 + (x/625 * 10) ) # Smaller values means possibly detecting more false circles
+        param2 = int( p2_base + (x/ref_width * p2_grow) ) # Smaller values means possibly detecting more false circles
 
         # 0.12
-        maxDiameter = int(x * 0.12) #9 # Maximum circle diameter
+        maxDiameter = int(x * diameter_ratio) #9 # Maximum circle diameter
         # 0.8
-        minDiameter = int(0.8 * maxDiameter) # Minimum circle diamenter
+        minDiameter = int(min_diameter * maxDiameter) # Minimum circle diamenter
 
         maxRadius = math.ceil(maxDiameter / 2)
         minRadius = math.ceil(minDiameter / 2)
         
         # 0.032
-        minDist = (minRadius * 2 + math.floor(x * 0.032)) # Minimum distance between each circle center.
+        minDist = (minRadius * 2 + math.floor(x * distance_ratio)) # Minimum distance between each circle center.
 
         # Adjusting minRadius, maxRadius, param2 and minDist seems to yield more detections if done right.
 
         circles = cv2.HoughCircles(
-            thresholded,
+            image,
             cv2.HOUGH_GRADIENT,
-            2,
+            dp,
             minDist,
             param1=param1,
             param2=param2,
@@ -204,12 +196,56 @@ class BaseSheet:
             )
 
             #PARAM 20 = ySnapTolerate
-            snappedYs = self.snappedYs(circles[0], 20)
+            snappedYs = self.snappedYs(circles[0], y_snap)
 
-            for i in enumerate(circles[0]):
+            for i, circle in enumerate(circles[0]):
                 circles[0][i,1] = snappedYs[i]
+            
+            # circled = cv2.cvtColor(image.copy(), cv2.COLOR_GRAY2BGR)
+            # for circle in circles[0]:
+            #     cv2.circle(circled, (circle[0], circle[1]), circle[2], (0,0,255), thickness=2)
+            # downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
+            # cv2.imshow("Circled", downCircled)
+            # cv2.waitKey()
 
             return sorted(circles[0], key=lambda v: [v[1], v[0]])
         else:
-            return numpy.array()
+            return numpy.array([])
     
+    def readCircles(self, sourceImage, circles, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED):
+        result = []
+
+        for i, circle in enumerate(circles):
+
+            radius = circle[2]
+            centerX = circle[0]
+            centerY = circle[1]
+
+            x1 = centerX - radius
+            y1 = centerY - radius
+            x2 = centerX + radius
+            y2 = centerY + radius
+
+            slice = sourceImage[y1:y2, x1:x2]
+
+            circleHistogram = cv2.calcHist([slice], [0], None, [2], [0,256])
+
+            darks = circleHistogram[0,0]
+            brights = circleHistogram[1,0]
+            totals = darks + brights
+
+            marked = darks > int(percentage * totals)
+
+            result.append(mark if marked else unmark)
+        
+        return result
+
+    def circleImagePrep(self, image, blur_ratio=400):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.medianBlur(gray, self.getAverageBlurKernel(blur_ratio)[0])
+        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+        return {
+            'gray': gray,
+            'blurred': blurred,
+            'threshold': thresholded
+        }
