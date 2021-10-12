@@ -162,11 +162,7 @@ class BaseSheet:
 
     # Detects circles on image
     def findCircles(self, image):
-        random.seed()
         # TO DO: Extract parameters to either class constants or method parameters.
-
-        # Every circle is appended to this list
-        result = []
         x = image.shape[1] or 1
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -202,8 +198,6 @@ class BaseSheet:
             maxRadius=maxRadius
         )
 
-        circled = image.copy()
-
         if circles is not None:
             circles = numpy.uint16(
                 numpy.fix(circles / (1,10,1)) * (1,10,1)
@@ -212,98 +206,10 @@ class BaseSheet:
             #PARAM 20 = ySnapTolerate
             snappedYs = self.snappedYs(circles[0], 20)
 
-            for i, circle in enumerate(circles[0]):
+            for i in enumerate(circles[0]):
                 circles[0][i,1] = snappedYs[i]
 
-            circlesSorted = sorted(circles[0], key=lambda v: [v[1], v[0]])
-
-            for i, circle in enumerate(circlesSorted):
-
-                radius = circle[2]
-                centerX = circle[0]
-                centerY = circle[1]
-
-                x1 = centerX - radius
-                y1 = centerY - radius
-                x2 = centerX + radius
-                y2 = centerY + radius
-
-                # print(f'CI {i} COORDINATES x: {centerX} y: {centerY}')
-
-                slice = gray[y1:y2, x1:x2]
-
-                circleHistogram = cv2.calcHist([slice], [0], None, [2], [0,256])
-
-                darks = circleHistogram[0,0]
-                brights = circleHistogram[1,0]
-                totals = darks + brights
-
-                # print(f'CI {i} Percents {darks/totals * 100}%')
-
-                marked = darks > int(0.30 * totals)
-
-                result.append('X' if marked else 'O')
-
-                # cv2.imshow('circle', slice)
-                # cv2.waitKey()
-
-                # Below is temporary code to draw on the source image for us
-                # to draw detected circles in the source image.
-                # print(i[2])
-
-                # draw the outer circle
-                cv2.circle(circled,(centerX,centerY),circle[2],(0,255,0),1)
-                # draw the center of the circle
-                cv2.circle(circled,(centerX,centerY),2,(0,0,255),3)
-
-                font                   = cv2.FONT_HERSHEY_SIMPLEX
-                fontScale              = 1
-                fontColor              = (0,0,0)
-                lineType               = 1
-
-                cv2.putText(circled,str(i), 
-                    (centerX,centerY+20), 
-                    font,
-                    fontScale,
-                    fontColor,
-                    thickness=2
-                )
-                
-                cv2.putText(circled,f'X' if marked else f'O', 
-                    (centerX,centerY), 
-                    font,
-                    1,
-                    (255,20,147),
-                    thickness=5
-                )
-
-
-        # Renders the image on a window called 'circles'
-        # If no circles were found, you wont see any...
-
-        circledWidth = circled.shape[1]
-        circledHeight = circled.shape[0]
-        downCircled = cv2.resize(circled, (math.floor(circledWidth/3), math.floor(circledHeight/3)) )
-
-        # cv2.imshow(f'circles {x} ({random.randint(1,9999)})', downCircled)
-
-        # Makes the previous window await a key before continuing execution.
-        # If the window is showing up then disappearing try setting a breakpoint
-        # on this function's return statement.
-        # cv2.waitKey()
-
-        # result = numpy.array(result, dtype=None, ndmin=1)
-
-        questions = []
-        question = []
-        for option in result:
-            question.append(option)
-            if (len(question) == 5):
-                questions.append(question)
-                question = []
-
-        # if (result.shape[0] == 100):
-        #     result = numpy.reshape(result, (20,5), order='A')
-
-        return questions
+            return sorted(circles[0], key=lambda v: [v[1], v[0]])
+        else:
+            return numpy.array()
     
