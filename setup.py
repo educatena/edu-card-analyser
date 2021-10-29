@@ -1,13 +1,11 @@
 from setuptools import setup
 import setuptools
 
-from edu_card_models.SheetV1 import SheetV1
-
 setup(
     name='edu-card-analyser',
     version='0.0.1',
     author='Educatena',
-    author_email='...',
+    author_email='tic@educatena.com.br',
     description='Educatena\'s Computer Vision python package for analysing Answer Cards from images.',
     url='https://github.com/pypa/sampleproject',
     # packages=['example_package'],
