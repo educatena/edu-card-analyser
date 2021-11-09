@@ -4,6 +4,7 @@ import random
 import math
 import collections
 from matplotlib import pyplot as plt
+from datetime import datetime
 
 # Gaussian blur constants
 BLUR_KERNEL_RATIO = 400
@@ -17,8 +18,8 @@ CONTOUR_VERTEX_Y = 0,1
 CONTOUR_VERTEX_X = 0,0
 
 # Contour Height constants
-CONTOUR_FIRST_VERTEX = 0
-CONTOUR_SECOND_VERTEX = 1
+HEIGHT_FIRST_VERTEX = 0
+HEIGHT_SECOND_VERTEX = 2
 CONTOUR_HEIGHT_ROUND = -1
 
 # Read Circle constants
@@ -47,6 +48,9 @@ class BaseSheet:
 
     # Python List of contours detected
     contours = None
+
+    # Temporary object for meta-info
+    meta = {}
     
     def __init__(self, image) -> None:
         self.source = image
@@ -86,20 +90,38 @@ class BaseSheet:
 
         return contours
 
+    def sortContour(self, contour):
+        sortedContour = numpy.sort(contour, 1)
+
+        return sortedContour
+
     def getSquareContourHeight(self, contour):
-        y1 = contour[CONTOUR_FIRST_VERTEX][CONTOUR_VERTEX_Y]
-        y2 = contour[CONTOUR_SECOND_VERTEX][CONTOUR_VERTEX_Y]
+
+        y1 = contour[HEIGHT_FIRST_VERTEX][CONTOUR_VERTEX_Y]
+        y2 = contour[HEIGHT_SECOND_VERTEX][CONTOUR_VERTEX_Y]
 
         height = abs(y1 - y2)
 
         return height
 
-    # Uses a contour to get an image 'slice' of that contour area.
+    # Uses a contour to get ''an image 'slice' of that contour area.
     def getSubImage(self, source, contour):
-        x1 = contour[0][CONTOUR_VERTEX_X]
-        y1 = contour[0][CONTOUR_VERTEX_Y]
-        x2 = contour[2][CONTOUR_VERTEX_X]
-        y2 = contour[2][CONTOUR_VERTEX_Y]
+
+        xySums = [
+            (lambda coordinate: [point[0] + point[1] for point in coordinate] + [i])(coordinate) for i, coordinate in enumerate(contour)
+        ]
+
+        xySums = sorted(xySums)
+
+        closestPoint = xySums[0]
+        furthestPoint = xySums[len(xySums) -1]
+
+        # print('\n\n\n', contour, '\n', f'closest point {closestPoint} {contour[closestPoint[1]]}, furthest point {furthestPoint} {contour[furthestPoint[1]]}' , '\n\n\n')
+
+        x1 = contour[closestPoint[1]][CONTOUR_VERTEX_X]
+        y1 = contour[closestPoint[1]][CONTOUR_VERTEX_Y]
+        x2 = contour[furthestPoint[1]][CONTOUR_VERTEX_X]
+        y2 = contour[furthestPoint[1]][CONTOUR_VERTEX_Y]
         return source[y1:y2, x1:x2]
 
     # Takes image_contours and extract squares from image whose y/x ratios are above ratio_threshold
@@ -114,6 +136,9 @@ class BaseSheet:
             approximate = cv2.approxPolyDP(contour, perimeter, True)
 
             if len(approximate) == 4:
+                # Lets sort the points so that we have a uniform distribution in x and y
+                approximate = self.sortContour(approximate)
+
                 # We round the height so we have some pixel tolerance for very similar contour heights
                 height = numpy.around(self.getSquareContourHeight(approximate), CONTOUR_HEIGHT_ROUND)
 
@@ -160,6 +185,7 @@ class BaseSheet:
     def findCircles(self, image, dp, ref_width, distance_ratio, diameter_ratio, y_snap=20, min_diameter=0.8, p1_base=350, p1_grow=50, p2_base=35, p2_grow=-10):
         # TO DO: Extract parameters to either class constants or method parameters.
         x = image.shape[1] or 1
+        if x < 50: return []
 
         # 350 625 50
         param1 = int( p1_base - (x/ref_width * p1_grow) ) # I have no idea what this parameter is yet, lets mess around with it
@@ -178,6 +204,23 @@ class BaseSheet:
         minDist = (minRadius * 2 + math.floor(x * distance_ratio)) # Minimum distance between each circle center.
 
         # Adjusting minRadius, maxRadius, param2 and minDist seems to yield more detections if done right.
+        
+        params = {
+            'dp': dp,
+            'minDist': minDist,
+            'param1': param1,
+            'param2': param2,
+            'minRadius': minRadius,
+            'maxRadius': maxRadius,
+            'minDiameter': minDiameter,
+            'maxDiameter': maxDiameter,
+            'x': x,
+            'diameter_ratio': diameter_ratio
+        }
+
+        cp = self.meta.get('circle_params') or []
+        cp.append(params)
+        self.meta['circle_params'] = cp
 
         circles = cv2.HoughCircles(
             image,
@@ -205,8 +248,8 @@ class BaseSheet:
             # for circle in circles[0]:
             #     cv2.circle(circled, (circle[0], circle[1]), circle[2], (0,0,255), thickness=2)
             # downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
-            # cv2.imshow("Circled", downCircled)
-            # cv2.waitKey()
+            # stamp = datetime.now().strftime("%d%H%M%S%f")
+            # cv2.imwrite(f"{stamp}_circles_{len(circles[0])}.png", downCircled)
 
             return sorted(circles[0], key=lambda v: [v[1], v[0]])
         else:

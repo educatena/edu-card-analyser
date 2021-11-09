@@ -15,14 +15,32 @@ class SheetV1(BaseSheet):
     studentNumber = None
     squares = None
 
+    meta = {}
+
     def __init__(self, image) -> None:
         super().__init__(image)
         (self.panels, self.squares) = self.getTallestSquares()
         self.questions = self.getQuestions()
         self.studentNumber = self.getStudentNumber()
 
+    def getMeta(self):
+        return self.meta
+
     def getTallestSquares(self):
         (zones, tallest) = self.findSquares(self.contours, self.source)
+
+
+        self.meta['tallestSquare'] = tallest.item() if type(tallest) != int else tallest
+        self.meta['squares'] = [
+            (
+                lambda contours: [height.item()] + [
+                    [
+                        point for point in contour.tolist()
+                    ] for contour in contours
+                ]
+
+            )(zones[height]) for height in zones
+        ]
 
         tallestZones = {}
         for contour in zones[tallest]:
@@ -36,6 +54,8 @@ class SheetV1(BaseSheet):
         return (tallestZones, zones)
     
     def getQuestions(self):
+        # self.meta['circles'] = {}
+
         numberedQuestions = {}
         if len(self.panels) != 0:
             multiplier = 1
@@ -45,6 +65,7 @@ class SheetV1(BaseSheet):
                 threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(image, PANEL_BLUR_RATIO))
 
                 circles = self.findCircles(threshold, 2, 625, 0.032, 0.12)
+                # self.meta['circles'][multiplier] = [circle.tolist() for circle in  circles]
                 circleMarks = self.readCircles(gray, circles)
                 questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
 
@@ -52,7 +73,8 @@ class SheetV1(BaseSheet):
                     numberedQuestions[NUMBERING_FUNCTION(multiplier, i)] = question
                 multiplier += 1
         
-        return numberedQuestions
+        if (len(numberedQuestions) == 0): return None 
+        else: return numberedQuestions
 
     def circleMatrix(self, per_row, circlesArray):
         questions = []
@@ -65,8 +87,11 @@ class SheetV1(BaseSheet):
         return questions
 
     def getStudentNumber(self):
-        whichSquare = list(self.squares)[1]
-        square = self.squares[whichSquare][0]
+        if (len(self.squares) < 2): return None
+
+        secondTallest = list(self.squares)[1]
+        square = self.squares[secondTallest][0]
+
         slice = self.getSubImage(self.source, square)
 
         REF_WIDTH = 762
@@ -86,24 +111,24 @@ class SheetV1(BaseSheet):
             p2_grow=-8
         )
         marks = self.readCircles(gray, circles)
-        marksFound = len(marks)
 
-        if (marksFound == 90):
-            markMatrix = self.circleMatrix(9, marks)
-            places = [None, None, None, None, None, None, None, None, None]
-            for i, markRow in enumerate(markMatrix):
-                for mark_place, mark in enumerate(markRow):
-                    if mark == 'O':
-                        continue
-                    else:
-                        if (places[mark_place] == None): places[mark_place] = 0
-                        places[mark_place] = places[mark_place] + (i+1)
-                    
-            convert = lambda x: 'X' if x is None else str(x)
-            number = ''
-            number = number.join([
-                convert(e) for e in places
-            ])
-            return number
-        else:
-            raise Exception('Não consegui encontrar todos os círculos no quadro de número do aluno.')
+        markMatrix = self.circleMatrix(9, marks)
+        places = [None, None, None, None, None, None, None, None, None]
+        for i, markRow in enumerate(markMatrix):
+            for mark_place, mark in enumerate(markRow):
+                if mark == 'O':
+                    continue
+                else:
+                    if (places[mark_place] == None): places[mark_place] = 0
+                    places[mark_place] = places[mark_place] + (i+1)
+                
+        convert = lambda x: 'X' if x is None else str(x)
+        number = ''
+        number = number.join([
+            convert(e) for e in places
+        ])
+
+        if number == 'XXXXXXXXX': return None
+
+
+        return number
