@@ -31,3 +31,6 @@ After that, the python environment in which you install that whl file will have 
     pipenv install
     pipenv shell
     python src/tester.py
+
+## Upload the build to pypi
+    python3 -m twine upload dist/*
