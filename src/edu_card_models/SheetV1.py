@@ -94,15 +94,18 @@ class SheetV1(BaseSheet):
 
         slice = self.getSubImage(self.source, square)
 
+        width = slice.shape[1]
+
         REF_WIDTH = 762
-        DIST_RATIO = 0.02
-        DIAMETER_RATIO = 72 / 762
-        MIN_DIAMETER_RATIO = 0.5
+        REF_CIRCLE_WIDTH = 60.0
+        DIST_RATIO = (6 * width/762) / REF_WIDTH
+        DIAMETER_RATIO = (REF_CIRCLE_WIDTH / REF_WIDTH) * 1.10
+        MIN_DIAMETER_RATIO = 0.85
 
         threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(slice, 600))
         circles = self.findCircles(
             threshold,
-            1,
+            2,
             REF_WIDTH,
             DIST_RATIO,
             DIAMETER_RATIO,
