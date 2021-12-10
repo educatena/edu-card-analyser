@@ -61,6 +61,8 @@ class BaseSheet:
 
         self.edged = self.blackWhiteEdgeImage(image)
         self.contours = self.findContours()
+
+        self.meta['circle_count'] = 0
     
     def getAverageBlurKernel(self, imageRatio=100):
         imageAverageSide = math.floor((self.sourceWidth + self.sourceHeight) / 2)
@@ -77,10 +79,10 @@ class BaseSheet:
         thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
         return thresholded
 
-    def findContours(self):
+    def findContours(self, img = None):
 
         contours = cv2.findContours(
-            self.edged.copy(),
+            self.edged.copy() if img is None else img,
             CONTOUR_MODE,
             CONTOUR_METHOD
         )[0]
@@ -182,7 +184,7 @@ class BaseSheet:
         return yAxisPool[y]
 
     # Detects circles on image
-    def findCircles(self, image, dp, ref_width, distance_ratio, diameter_ratio, y_snap=20, min_diameter=0.8, p1_base=350, p1_grow=50, p2_base=35, p2_grow=-10):
+    def findCircles(self, image, dp, ref_width, distance_ratio, diameter_ratio, y_snap=20, min_diameter=0.8, p1_base=350, p1_grow=50, p2_base=35, p2_grow=-10, imagedbg=None):
         # TO DO: Extract parameters to either class constants or method parameters.
         x = image.shape[1] or 1
         if x < 50: return []
@@ -234,6 +236,7 @@ class BaseSheet:
         )
 
         if circles is not None:
+            
             circles = numpy.uint16(
                 numpy.fix(circles / (1,10,1)) * (1,10,1)
             )
@@ -242,14 +245,17 @@ class BaseSheet:
             snappedYs = self.snappedYs(circles[0], y_snap)
 
             for i, circle in enumerate(circles[0]):
+                self.meta['circle_count'] += 1
                 circles[0][i,1] = snappedYs[i]
             
-            # circled = cv2.cvtColor(image.copy(), cv2.COLOR_GRAY2BGR)
-            # for circle in circles[0]:
-            #     cv2.circle(circled, (circle[0], circle[1]), circle[2], (0,0,255), thickness=2)
-            # downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
-            # stamp = datetime.now().strftime("%d%H%M%S%f")
-            # cv2.imwrite(f"{stamp}_circles_{len(circles[0])}.png", downCircled)
+            if imagedbg is not None:
+                circled = imagedbg.copy()
+                for circle in circles[0]:
+                    cv2.circle(circled, (circle[0], circle[1]), circle[2], (0,0,255), thickness=2)
+                downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
+                stamp = datetime.now().strftime("%d%H%M%S%f")
+                # cv2.imshow(f"{stamp}_circles_{len(circles[0])}.png", downCircled)
+                cv2.imwrite(f"{stamp}_circles_{len(circles[0])}.png", downCircled)
 
             return sorted(circles[0], key=lambda v: [v[1], v[0]])
         else:
@@ -292,3 +298,18 @@ class BaseSheet:
             'blurred': blurred,
             'threshold': thresholded
         }
+
+    def readableContour(self, contour, native=False):
+        if native:
+            return str(contour)
+        
+        return str([
+            [f'x{i}:{point[0][0]} y{i}:{point[0][1]}'] for i, point in enumerate(contour.tolist())
+        ])
+
+    def readQRCode(self, image):
+        reader = cv2.QRCodeDetector()
+
+        decodedText, points, _ = reader.detectAndDecode(image)
+
+        return decodedText
