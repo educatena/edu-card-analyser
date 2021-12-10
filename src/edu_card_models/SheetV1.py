@@ -1,6 +1,7 @@
 import numpy
 from edu_card_models.BaseSheet import BaseSheet
 from operator import itemgetter
+import traceback
 
 FIRST_CONTOUR_X = 0,0,0
 PANEL_KEY = lambda contour: contour[FIRST_CONTOUR_X]
@@ -34,11 +35,8 @@ class SheetV1(BaseSheet):
         self.meta['squares'] = [
             (
                 lambda contours: [height.item()] + [
-                    [
-                        point for point in contour.tolist()
-                    ] for contour in contours
+                    self.readableContour(contour) for contour in contours
                 ]
-
             )(zones[height]) for height in zones
         ]
 
@@ -135,3 +133,26 @@ class SheetV1(BaseSheet):
 
 
         return number
+
+    def toDict(self):
+        information = {}
+        
+        try:
+
+            questions = self.questions
+            student_number = self.studentNumber
+            information['meta'] = self.meta
+
+            information['data'] = {
+                'questions': questions,
+                'identifier': student_number,
+                'version': 'V1'
+            }
+
+        except Exception as error:
+            information['error'] = {
+                'message': str(error),
+                'detailed': traceback.format_exc()
+            }
+        
+        return information
