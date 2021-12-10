@@ -1,11 +1,12 @@
 import cv2
+from edu_card_models.SheetCR1 import SheetCR1
 from edu_card_models.SheetV1 import SheetV1
 from edu_card_utils.cvutils import image_convert
+import os
 
-sheet = SheetV1(cv2.imread('test300x.jpg'))
+# sheet = SheetV1(cv2.imread('test300x.jpg'))
+print(os.getcwd())
 
-
-img = cv2.imread('test300x.jpg')
-print('unga bunga', image_convert)
+sheetcr1 = SheetCR1(cv2.imread('qrc.jpg'))
 
 cv2.waitKey()
