@@ -1,3 +1,4 @@
+import cv2
 import numpy
 import traceback
 from edu_card_models.BaseSheet import BaseSheet
@@ -21,8 +22,8 @@ class SheetCR1(BaseSheet):
 
     def __init__(self, image) -> None:
         super().__init__(image)
-        (panels, squares) = self.getTallestSquares(self.contours, self.source)
-        self.questionPanel = panels[sorted(panels)[0]]
+
+        self.questionPanel = self.getQuestionsPanel()
 
         (self.panels, self.squares) = self.getQuestionPanels(self.questionPanel)
 
@@ -36,6 +37,15 @@ class SheetCR1(BaseSheet):
 
         return self.getTallestSquares(contours, image)
         # return zones#[tallest]
+    
+    def getQuestionsPanel(self):
+        (zones, tallest) = self.findSquares(self.contours, self.source)
+
+        contours = zones[tallest]
+
+        image = self.getSubImage(self.source, contours[0])
+
+        return image
 
     def getMeta(self):
         return self.meta
@@ -65,6 +75,8 @@ class SheetCR1(BaseSheet):
     
     def getQuestions(self):
         # self.meta['circles'] = {}
+
+        print('oh!', len(self.panels))
 
         numberedQuestions = {}
         if len(self.panels) != 0:
@@ -107,12 +119,12 @@ class SheetCR1(BaseSheet):
             try:
 
                 questions = self.questions
-                student_number = self.qrData
+                qrData = self.qrData
                 information['meta'] = self.meta
 
                 information['data'] = {
                     'questions': questions,
-                    'qr': student_number,
+                    'qr': qrData,
                     'version': 'CR1'
                 }
 

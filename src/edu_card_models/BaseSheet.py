@@ -144,10 +144,15 @@ class BaseSheet:
                 # We round the height so we have some pixel tolerance for very similar contour heights
                 height = numpy.around(self.getSquareContourHeight(approximate), CONTOUR_HEIGHT_ROUND)
 
+                # print(f'reading contour height: {height} definition:{self.readableContour(approximate)}')
+
                 if (height > biggestHeight): biggestHeight = height
 
                 if not height in squaresByHeight:
                     squaresByHeight[height] = []
+
+                # slice = self.getSubImage(image, approximate)
+                # cv2.imwrite(f'square_w{slice.shape[1]}_h{slice.shape[0]}_{random.randint(0,9999)}.jpeg', slice)
 
                 squaresByHeight[height].append(approximate)
 

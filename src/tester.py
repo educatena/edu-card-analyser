@@ -7,6 +7,6 @@ import os
 # sheet = SheetV1(cv2.imread('test300x.jpg'))
 print(os.getcwd())
 
-sheetcr1 = SheetCR1(cv2.imread('qrc.jpg'))
+sheetcr1 = SheetCR1(cv2.imread('renderedv2.jpg'))
 
 cv2.waitKey()
