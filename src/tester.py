@@ -7,6 +7,8 @@ import os
 # sheet = SheetV1(cv2.imread('test300x.jpg'))
 print(os.getcwd())
 
-sheetcr1 = SheetCR1(cv2.imread('renderedv2.jpg'))
+image = cv2.imread('/home/tetra/Downloads/cartao_teste_1.pdf_1 _bigger.jpg')
+
+sheetcr1 = SheetCR1(image)
 
 cv2.waitKey()

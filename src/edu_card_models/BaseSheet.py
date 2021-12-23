@@ -2,7 +2,6 @@ import cv2
 import numpy
 import random
 import math
-import collections
 from matplotlib import pyplot as plt
 from datetime import datetime
 
@@ -151,9 +150,6 @@ class BaseSheet:
                 if not height in squaresByHeight:
                     squaresByHeight[height] = []
 
-                # slice = self.getSubImage(image, approximate)
-                # cv2.imwrite(f'square_w{slice.shape[1]}_h{slice.shape[0]}_{random.randint(0,9999)}.jpeg', slice)
-
                 squaresByHeight[height].append(approximate)
 
         return (squaresByHeight, biggestHeight)
@@ -269,6 +265,8 @@ class BaseSheet:
     def readCircles(self, sourceImage, circles, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED):
         result = []
 
+        # graycopy = sourceImage.copy()
+
         for i, circle in enumerate(circles):
 
             radius = circle[2]
@@ -279,6 +277,8 @@ class BaseSheet:
             y1 = centerY - radius
             x2 = centerX + radius
             y2 = centerY + radius
+
+            # cv2.circle(graycopy, (circle[0], circle[1]), circle[2], (0,0,255), thickness=1)
 
             slice = sourceImage[y1:y2, x1:x2]
 
@@ -291,6 +291,9 @@ class BaseSheet:
             marked = darks > int(percentage * totals)
 
             result.append(mark if marked else unmark)
+
+        # stamp = datetime.now().strftime("%d%H%M%S%f")
+        # cv2.imwrite(f"{stamp}_circles_{len(circles)}.png", graycopy)
         
         return result
 

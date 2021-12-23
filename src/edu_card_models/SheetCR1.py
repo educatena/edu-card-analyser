@@ -1,14 +1,17 @@
+import math
 import cv2
 import numpy
 import traceback
 from edu_card_models.BaseSheet import BaseSheet
 from operator import itemgetter
 
+from edu_card_utils.coordutils import grid
+
 FIRST_CONTOUR_X = 0,0,0
 PANEL_KEY = lambda contour: contour[FIRST_CONTOUR_X]
 PANEL_BLUR_RATIO = 600
 OPTION_PER_QUESTION = 5
-QUESTION_PER_PANEL = 20
+QUESTION_PER_PANEL = 25
 NUMBERING_FUNCTION = lambda panel, question: (question + 1) + (QUESTION_PER_PANEL * panel) - QUESTION_PER_PANEL
 
 class SheetCR1(BaseSheet):
@@ -18,25 +21,18 @@ class SheetCR1(BaseSheet):
     squares = None
     questionPanel = None
 
-    meta = {}
-
     def __init__(self, image) -> None:
         super().__init__(image)
 
         self.questionPanel = self.getQuestionsPanel()
-
-        (self.panels, self.squares) = self.getQuestionPanels(self.questionPanel)
-
         self.questions = self.getQuestions()
         self.qrData = self.getQRData(self.source)
 
     def getQuestionPanels(self, image):
         edged = self.blackWhiteEdgeImage(image)
         contours = self.findContours(edged.copy())
-        # (zones, tallest) = self.findSquares(contours, image)
 
         return self.getTallestSquares(contours, image)
-        # return zones#[tallest]
     
     def getQuestionsPanel(self):
         (zones, tallest) = self.findSquares(self.contours, self.source)
@@ -74,27 +70,49 @@ class SheetCR1(BaseSheet):
         return (tallestZones, zones)
     
     def getQuestions(self):
-        # self.meta['circles'] = {}
-
-        print('oh!', len(self.panels))
-
         numberedQuestions = {}
-        if len(self.panels) != 0:
-            multiplier = 1
-            for x in sorted(list(self.panels)):
-                image = self.panels[x]
-                
-                threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(image, PANEL_BLUR_RATIO))
+        image = self.questionPanel
 
-                circles = self.findCircles(threshold, 2, 264, 0.040, 0.1317, p2_base=40, p2_grow=-5, min_diameter=0.9, imagedbg=None)
-                # self.meta['circles'][multiplier] = [circle.tolist() for circle in  circles]
-                circleMarks = self.readCircles(gray, circles)
-                questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
+        ref_width = 1109
+        ref_height = 831
+        real_height = image.shape[0]
+        real_width = image.shape[1]
 
-                for i, question in enumerate(questions):
-                    numberedQuestions[NUMBERING_FUNCTION(multiplier, i)] = question
-                multiplier += 1
-        
+        panel_count = 5
+        start = [
+            math.floor(72/ref_width * real_width),
+            math.floor(61/ref_height * real_height)
+        ]
+        panel_distance = [
+            math.floor(218/ref_width * real_width),
+            math.floor(217/ref_width * real_width),
+            math.floor(218/ref_width * real_width),
+            math.floor(215/ref_width * real_width),
+            0
+        ]
+        circle_center_distance = [
+            math.floor(30.5/ref_width * real_width),
+            math.floor(30/ref_height * real_height)
+        ]
+        panel_start = [start[0], start[1]]
+
+        circle_radius = math.floor(12/ref_width * real_width)
+
+        threshold, gray = itemgetter('threshold', 'gray')(self.circleImagePrep(image, PANEL_BLUR_RATIO))
+
+        multiplier = 1
+        for panel in range(0, panel_count):
+            panel_circles = grid(panel_start, circle_center_distance, 25, 5, z=circle_radius)
+
+            circleMarks = self.readCircles(gray, panel_circles)
+            questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
+            panel_start[0] += panel_distance[panel]
+
+            for i, question in enumerate(questions):
+                numberedQuestions[NUMBERING_FUNCTION(multiplier, i)] = question
+
+            multiplier += 1
+
         if (len(numberedQuestions) == 0): return None 
         else: return numberedQuestions
 
