@@ -20,24 +20,41 @@ class SheetCR1(BaseSheet):
     qrData = None
     squares = None
     questionPanel = None
+    qrPanel = None
+
+    zones = None
+    tallest = None
 
     def __init__(self, image) -> None:
         super().__init__(image)
 
+        (self.zones, self.tallest) = self.findSquares(self.contours, self.source)
+
         self.questionPanel = self.getQuestionsPanel()
+        self.qrPanel = self.getQrPanel()
         self.questions = self.getQuestions()
-        self.qrData = self.getQRData(self.source)
+        self.qrData = self.getQRData(self.qrPanel)
 
-    def getQuestionPanels(self, image):
-        edged = self.blackWhiteEdgeImage(image)
-        contours = self.findContours(edged.copy())
+    def getQrPanel(self):
+        ref_height = 2526
+        qr_zone_height = 480
 
-        return self.getTallestSquares(contours, image)
+        real_height = math.floor(qr_zone_height/ref_height * self.sourceHeight)
+
+        zone_candidate = None
+
+        for zone in self.zones:
+            if (int(zone) > real_height * 0.95 and int(zone) <= real_height * 1.05):
+                zone_candidate = self.zones[zone][0]
+        
+        if (zone_candidate is not None):
+            return self.getSubImage(self.source, zone_candidate)
+        else:
+            return None
     
     def getQuestionsPanel(self):
-        (zones, tallest) = self.findSquares(self.contours, self.source)
 
-        contours = zones[tallest]
+        contours = self.zones[self.tallest]
 
         image = self.getSubImage(self.source, contours[0])
 
@@ -47,7 +64,8 @@ class SheetCR1(BaseSheet):
         return self.meta
 
     def getTallestSquares(self, contours, source):
-        (zones, tallest) = self.findSquares(contours, source)
+        zones = self.zones
+        tallest = self.tallest
 
         self.meta['tallestSquare'] = tallest.item() if type(tallest) != int else tallest
         self.meta['squares'] = [
