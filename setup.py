@@ -3,11 +3,11 @@ import setuptools
 
 setup(
     name='edu-card-analyser',
-    version='0.1.0',
+    version='1.0.1',
     author='Educatena',
     author_email='tic@educatena.com.br',
     description='Educatena\'s Computer Vision python package for analysing Answer Cards from images.',
-    url='https://github.com/pypa/sampleproject',
+    url='https://github.com/educatena/edu-card-analyser',
     # packages=['example_package'],
     package_dir={'': 'src'},
     classifiers=[
