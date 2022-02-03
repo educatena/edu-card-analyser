@@ -123,6 +123,14 @@ class SheetCR1(BaseSheet):
             panel_circles = grid(panel_start, circle_center_distance, 25, 5, z=circle_radius)
 
             circleMarks = self.readCircles(gray, panel_circles)
+
+            debug = image.copy()
+
+            for circle in panel_circles:
+                cv2.circle(debug, (circle[0], circle[1]), circle_radius, (255,0,0), 2)
+                
+            cv2.imwrite(f'debug/circles_{panel}.png', debug)
+
             questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
             panel_start[0] += panel_distance[panel]
 

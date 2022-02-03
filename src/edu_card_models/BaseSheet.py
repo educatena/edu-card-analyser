@@ -1,3 +1,5 @@
+import os
+from time import time
 import cv2
 import numpy
 import random
@@ -5,26 +7,9 @@ import math
 from matplotlib import pyplot as plt
 from datetime import datetime
 
-# Gaussian blur constants
-BLUR_KERNEL_RATIO = 400
-BLUR_SIGMA_X = 0
-
-# Contour constants
-CONTOUR_MODE = cv2.RETR_EXTERNAL
-CONTOUR_METHOD = cv2.CHAIN_APPROX_SIMPLE
-PERIMETER_ARC = 0.02
-CONTOUR_VERTEX_Y = 0,1
-CONTOUR_VERTEX_X = 0,0
-
-# Contour Height constants
-HEIGHT_FIRST_VERTEX = 0
-HEIGHT_SECOND_VERTEX = 2
-CONTOUR_HEIGHT_ROUND = -1
-
-# Read Circle constants
-MARK_PERCENT = 0.30
-MARKED = 'X'
-NOT_MARKED = 'O'
+from edu_card_utils.ImageManipulation import lukeContrast, maskeShadowless, nathancyEdged
+from edu_card_utils.ImageIntelligence import nathancyContours
+from edu_card_utils.constants import BLUR_KERNEL_RATIO, BLUR_SIGMA_X, CONTOUR_HEIGHT_ROUND, CONTOUR_METHOD, CONTOUR_MODE, CONTOUR_VERTEX_X, CONTOUR_VERTEX_Y, HEIGHT_FIRST_VERTEX, HEIGHT_SECOND_VERTEX, MARK_PERCENT, MARKED, NOT_MARKED, PERIMETER_ARC
 
 """
 BaseSheet represents and collects
@@ -73,21 +58,55 @@ class BaseSheet:
     # Grayscales, blurs a little bit then uses threshold on the image to prepare it
     # on how the contour detection algorithm needs.
     def blackWhiteEdgeImage(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # random.seed(time())
+
+        contrast = lukeContrast(image)
+        cv2.imwrite(f"debug/edged_0_contrast_{random.randint(0,999999999)}.png", contrast)
+        
+        shadowless = maskeShadowless(contrast)
+        cv2.imwrite(f"debug/edged_0_shadowless_{random.randint(0,999999999)}.png", shadowless)
+
+        gray = cv2.cvtColor(shadowless, cv2.COLOR_BGR2GRAY)
+        cv2.imwrite(f"debug/edged_0_gray_{random.randint(0,999999999)}.png", gray)
+
         blurred = cv2.GaussianBlur(gray, self.source_blur_kernel, BLUR_SIGMA_X)
-        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+        cv2.imwrite(f"debug/edged_1_blurred_{random.randint(0,999999999)}.png", blurred)
+
+        # return nathancyEdged(shadowless, self.source_blur_kernel)
+
+        # threshold_mode = cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU
+        threshold_mode = cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU
+
+        thresholded = cv2.threshold(blurred, 0, 255, threshold_mode)[1]
+        cv2.imwrite(f"debug/edged_2_threshold_{random.randint(0,999999999)}.png", thresholded)
+
+        # edges = cv2.Canny(shadowless,100, 200)
+        # cv2.imwrite(f"debug/edged_1_canny_{random.randint(0,999999999)}.png", edges)
+
         return thresholded
 
-    def findContours(self, img = None):
+    def findContours(self):
 
         contours = cv2.findContours(
-            self.edged.copy() if img is None else img,
+            self.edged.copy(),
             CONTOUR_MODE,
             CONTOUR_METHOD
         )[0]
 
+        # contours = nathancyContours(self.edged.copy(), self.source)
+
         if contours is not None and len(contours) > 0:
             contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+        if self.source is not None:
+            circled = self.source.copy()
+            for contour in contours:
+                for point in contour:
+                    cv2.circle(circled, (point[CONTOUR_VERTEX_X], point[CONTOUR_VERTEX_Y]), 2, (255,0,0), thickness=1)
+            downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
+            stamp = datetime.now().strftime("%d%H%M%S%f")
+            # cv2.imshow(f"{stamp}_circles_{len(circles[0])}.png", downCircled)
+            cv2.imwrite(f"debug/{stamp}_contour_points_{random.randint(0,999999999)}.png", downCircled)
 
         return contours
 
@@ -151,6 +170,12 @@ class BaseSheet:
                     squaresByHeight[height] = []
 
                 squaresByHeight[height].append(approximate)
+
+                try:
+                    if (height > 10):
+                        cv2.imwrite(f'debug/squares_{random.randint(1,99999)}.png', self.getSubImage(image, approximate))
+                except Exception:
+                    print('oh noes, an exception!')
 
         return (squaresByHeight, biggestHeight)
 
@@ -298,14 +323,22 @@ class BaseSheet:
         return result
 
     def circleImagePrep(self, image, blur_ratio=400):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.medianBlur(gray, self.getAverageBlurKernel(blur_ratio)[0])
-        thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-        return {
-            'gray': gray,
-            'blurred': blurred,
-            'threshold': thresholded
-        }
+        try:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.medianBlur(gray, self.getAverageBlurKernel(blur_ratio)[0])
+            thresholded = cv2.threshold(blurred, 0, 255,cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+            return {
+                'gray': gray,
+                'blurred': blurred,
+                'threshold': thresholded
+            }
+        except Exception:
+            print("oh noes, an error, yuwu say??") 
+            return {
+                'gray': image,
+                'blurred': image,
+                'threshold': image
+            }
 
     def readableContour(self, contour, native=False):
         if native:
@@ -318,6 +351,9 @@ class BaseSheet:
     def readQRCode(self, image):
         reader = cv2.QRCodeDetector()
 
-        decodedText, points, _ = reader.detectAndDecode(image)
+        try:
+            decodedText, points, _ = reader.detectAndDecode(image)
+        except Exception:
+            return 'im slowly going insane'
 
         return decodedText
