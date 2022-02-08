@@ -2,8 +2,9 @@ import math
 import random
 import cv2
 import numpy as np
+import pyzbar.pyzbar as pyzbar
 
-from edu_card_utils.ImageManipulation import lukeContrast, maskeShadowless, thresholdImage
+from edu_card_utils.ImageManipulation import lukeContrast, maskeShadowless, thresholdImage, unsharp_mask
 from edu_card_utils.OpenCVUtils import contourSlice, getSquareContourHeight, sortContour
 from edu_card_utils.constants import CONTOUR_HEIGHT_ROUND, CONTOUR_VERTEX_X, CONTOUR_VERTEX_Y, MARK_PERCENT, MARKED, NOT_MARKED, PERIMETER_ARC
 
@@ -52,15 +53,15 @@ def normalizedImage(image, debug = None):
     contrast = lukeContrast(image)
     shadowless = maskeShadowless(contrast)
     gray = cv2.cvtColor(shadowless, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, averageBlurKernel(width, height, 200), 0)
+    # blurred = cv2.GaussianBlur(gray, averageBlurKernel(width, height, 150), 0)
 
     if (debug is not None):
-        cv2.imwrite(f"debug/normal_0_contrast_{random.randint(0,999999999)}.png", contrast)
-        cv2.imwrite(f"debug/normal_1_shadowless_{random.randint(0,999999999)}.png", shadowless)
-        cv2.imwrite(f"debug/normal_2_gray_{random.randint(0,999999999)}.png", gray)
-        cv2.imwrite(f"debug/normal_3_blurred_{random.randint(0,999999999)}.png", blurred)
+        cv2.imwrite(f"debug/{debug}_normal_0_contrast.png", contrast)
+        cv2.imwrite(f"debug/{debug}_normal_1_shadowless.png", shadowless)
+        cv2.imwrite(f"debug/{debug}_normal_2_gray.png", gray)
+        # cv2.imwrite(f"debug/{debug}_normal_3_blurred_{random.randint(0,999999999)}.png", blurred)
 
-    return blurred
+    return gray
 
 def findContours(source, mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_SIMPLE, debug = None):
     threshold_image = thresholdImage(normalizedImage(source, debug=debug), debug=debug)
@@ -82,7 +83,7 @@ def findContours(source, mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_SIM
 
         downCircled = cv2.resize(circled, (int(circled.shape[1]/2), int(circled.shape[0]/2)))
 
-        cv2.imwrite(f"debug/contour_points_{random.randint(0,999999999)}.png", downCircled)
+        cv2.imwrite(f"debug/{debug}_contours.png", downCircled)
 
     return contours
 
@@ -92,7 +93,7 @@ def findSquares(image_contours, image, debug = None):
     squaresByHeight = {}
     biggestHeight = 0
 
-    for contour in image_contours:
+    for i, contour in enumerate(image_contours):
         perimeter = PERIMETER_ARC * cv2.arcLength(contour, True)
         approximate = cv2.approxPolyDP(contour, perimeter, True)
 
@@ -114,7 +115,7 @@ def findSquares(image_contours, image, debug = None):
 
             try:
                 if (height > 10 and debug):
-                    cv2.imwrite(f'debug/squares_{height}_{random.randint(1,99999)}.png', contourSlice(image, approximate))
+                    cv2.imwrite(f'debug/{debug}_square_{i}_{height}.png', contourSlice(image, approximate))
             except Exception:
                 print('Could not save square slice')
 
@@ -136,10 +137,10 @@ def readDarkness(sourceImage, center, radius = 10, percentage = MARK_PERCENT, ma
 
     slice = sourceImage[y1:y2, x1:x2]
 
-    circleHistogram = cv2.calcHist([slice], [0], None, [2], [0,256])
+    circleHistogram = cv2.calcHist([slice], [0], None, [6], [0,256])
 
-    darks = circleHistogram[0,0]
-    brights = circleHistogram[1,0]
+    darks = circleHistogram[0,0] + circleHistogram[1,0] + circleHistogram[2,0] + circleHistogram[3,0]
+    brights = circleHistogram[4,0] + circleHistogram[5,0]
     totals = darks + brights
 
     marked = darks > int(percentage * totals)
@@ -157,11 +158,26 @@ def readCircles(sourceImage, circles, percentage = MARK_PERCENT, mark = MARKED, 
     return result
 
 def readQRCode(image):
+    image_sharp = thresholdImage(image)
+    cv2.imwrite(f"debug/qrtest.png", image_sharp)
+
     reader = cv2.QRCodeDetector()
 
-    try:
-        decodedText, points, _ = reader.detectAndDecode(image)
-    except Exception:
-        return 'im slowly going insane'
+    # try:
+    decodedText, points, _ = reader.detectAndDecode(image_sharp)
+
+    # except Exception:
+    #     return 'im slowly going insane'
 
     return decodedText
+
+def decodeMachineCode(im) :
+  # Find barcodes and QR codes
+  decodedObjects = pyzbar.decode(im)
+
+  # Print results
+  for obj in decodedObjects:
+    print('Type : ', obj.type)
+    print('Data : ', obj.data,'\n')
+
+  return decodedObjects

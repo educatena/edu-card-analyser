@@ -12,10 +12,29 @@ print(os.getcwd())
 
 bigger = '/home/tetra/Downloads/test.jpeg'
 
-image = cv2.imread('/home/tetra/Downloads/cr2_clean.jpg')
+# filePath = '/home/tetra/Downloads/cr2_clean_qrbig.jpg'
+filePath = '/home/tetra/Downloads/cartao_resposta_n1.jpg'
 
-# nathancyContours(image)
+image = cv2.imread(filePath)
 
-sheetcr1 = SheetCR2(image)
+images = []
 
-cv2.waitKey()
+ratio = 0.5
+
+for i in range(0, 1):
+    if (ratio == 4.0): break
+    images.append([ratio, cv2.resize(image, (int(image.shape[1] * ratio), int(image.shape[0] * ratio)))])
+    ratio += 0.25
+
+sheets = []
+
+for img in images:
+    try:
+        sheets.append(SheetCR2(img[1], f"{img[0]}"))
+    except Exception:
+        print(f'Could not use ratio {img[0]}')
+
+
+
+print('done')
+# cv2.waitKey()

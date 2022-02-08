@@ -3,6 +3,8 @@ import random
 import cv2
 import numpy as np
 
+from edu_card_utils.constants import CONTOUR_VERTEX_X, CONTOUR_VERTEX_Y
+
 
 def nathancyEdged(image, blur_kernel):
     random.seed()
@@ -78,5 +80,60 @@ def thresholdImage(blurred_image, mode = cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU
     thresholded = cv2.threshold(blurred_image, 0, 255, mode)[1]
 
     if (debug is not None):
-        cv2.imwrite(f"debug/threshold_{random.randint(0,999999999)}.png", thresholded)
+        cv2.imwrite(f"debug/{debug}_threshold.png", thresholded)
     return thresholded
+
+def perspectiveTransformation(source, source_coords):
+    width = 1200
+    height = 1600
+
+    dest_coords = np.float32(
+        [[0,0], [width,0], [0,height], [width,height]]
+    )
+    trans_matrix = cv2.getPerspectiveTransform(source_coords, dest_coords)
+    dst = cv2.warpPerspective(source, trans_matrix, (width,height))
+    return dst
+
+def getSlice(source, coords):
+    # xySums = [
+    #     (lambda coordinate: [point[0] + point[1]] + [i])(point) for i, point in enumerate(coords)
+    # ]
+
+    # xySums = sorted(xySums)
+
+    # closestPoint = xySums[0]
+    # furthestPoint = xySums[len(xySums) -1]
+
+    # # print('\n\n\n', contour, '\n', f'closest point {closestPoint} {contour[closestPoint[1]]}, furthest point {furthestPoint} {contour[furthestPoint[1]]}' , '\n\n\n')
+
+    # x1 = coords[closestPoint[1]][CONTOUR_VERTEX_X]
+    # y1 = coords[closestPoint[1]][CONTOUR_VERTEX_Y]
+    # x2 = coords[furthestPoint[1]][CONTOUR_VERTEX_X]
+    # y2 = coords[furthestPoint[1]][CONTOUR_VERTEX_Y]
+    # return source[y1:y2, x1:x2]
+
+    closest = 0
+    furthest = 3
+
+    return source[coords[closest,1]:coords[furthest,1], coords[closest,0]:coords[furthest,0]]
+
+def gustavoBrightnessNormalization(source):
+    alpha = 1
+    beta = 0
+    # res = cv2.multiply(source, alpha)
+    # res = cv2.add(res, beta)
+
+    res = cv2.convertScaleAbs(source, alpha = alpha, beta = beta)
+    return res
+
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask."""
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened

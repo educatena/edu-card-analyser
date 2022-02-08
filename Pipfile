@@ -7,6 +7,8 @@ name = "pypi"
 imutils = "*"
 opencv-python = "*"
 twine = "*"
+pytesseract = "*"
+pyzbar = "*"
 
 [dev-packages]
 

@@ -32,7 +32,23 @@ def getSquareContourWidth(contour):
     return width
 
 def getSquareContourCenter(contour):
-    first_vertex = contour[HEIGHT_FIRST_VERTEX]
+    xySums = [
+            (lambda coordinate: [point[0] + point[1] for point in coordinate] + [i])(coordinate) for i, coordinate in enumerate(contour)
+    ]
+
+    xySums = sorted(xySums)
+
+    closestPoint = xySums[0]
+    furthestPoint = xySums[len(xySums) -1]
+
+    # print('\n\n\n', contour, '\n', f'closest point {closestPoint} {contour[closestPoint[1]]}, furthest point {furthestPoint} {contour[furthestPoint[1]]}' , '\n\n\n')
+
+    # x1 = [CONTOUR_VERTEX_X]
+    # y1 = contour[closestPoint[1]][CONTOUR_VERTEX_Y]
+    # x2 = contour[furthestPoint[1]][CONTOUR_VERTEX_X]
+    # y2 = contour[furthestPoint[1]][CONTOUR_VERTEX_Y]
+
+    first_vertex = contour[closestPoint[1]]
 
     height = getSquareContourHeight(contour)
     width = getSquareContourWidth(contour)
@@ -60,3 +76,27 @@ def contourSlice(source, contour):
     y2 = contour[furthestPoint[1]][CONTOUR_VERTEX_Y]
     return source[y1:y2, x1:x2]
 
+
+def getLimits(source_img):
+    width = source_img.shape[1]
+    height = source_img.shape[0]
+    return numpy.float32([
+        [width,height],
+    ])
+
+def getContourDimensions(contour):
+    xySums = [
+            (lambda coordinate: [point[0] + point[1] for point in coordinate] + [i])(coordinate) for i, coordinate in enumerate(contour)
+    ]
+
+    xySums = sorted(xySums)
+
+    closestPoint = xySums[0]
+    furthestPoint = xySums[len(xySums) -1]
+
+    x1 = contour[closestPoint[1]][CONTOUR_VERTEX_X]
+    y1 = contour[closestPoint[1]][CONTOUR_VERTEX_Y]
+    x2 = contour[furthestPoint[1]][CONTOUR_VERTEX_X]
+    y2 = contour[furthestPoint[1]][CONTOUR_VERTEX_Y]
+
+    return (abs(x2-x1), abs(y2-y1))
