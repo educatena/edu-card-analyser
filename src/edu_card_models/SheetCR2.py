@@ -5,12 +5,11 @@ import traceback
 import cv2
 import numpy
 
-from edu_card_utils.ImageIntelligence import decodeMachineCode, findContours, findSquares, readCircles, readDarkness, readQRCode
+from edu_card_utils.ImageIntelligence import correct_orientation, decodeMachineCode, findContours, findSquares, readCircles, readDarkness, readQRCode
 from edu_card_utils.ImageManipulation import getSlice, gustavoBrightnessNormalization, perspectiveTransformation, thresholdImage
 from edu_card_utils.OpenCVUtils import getContourDimensions, getLimits, getSquareContourCenter, getSquareContourHeight, getSquareContourWidth, imageHeight
 from edu_card_utils.constants import HEIGHT_FIRST_VERTEX
 from edu_card_utils.coordutils import grid
-from tester3 import correct_orientation
 
 DEBUG = True
 CR2_ANCHOR_HEIGHT_RATIO = 0.017101325352714837
@@ -310,4 +309,4 @@ class SheetCR2():
 
     def log(self, message, data = {}):
         date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.messages.append({'message': message, 'data': data, 'datetime': date})
+        self.messages.append({'message': message, 'data': data.__str__(), 'datetime': date})
