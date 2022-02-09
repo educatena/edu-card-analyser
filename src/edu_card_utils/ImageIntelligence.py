@@ -122,7 +122,7 @@ def findSquares(image_contours, image, debug = None):
     return (squaresByHeight, biggestHeight)
 
 
-def readDarkness(sourceImage, center, radius = 10, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED):
+def readDarkness(sourceImage, center, radius = 10, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED, logger=None):
 
     radius = radius
     centerX = center[0]
@@ -145,15 +145,17 @@ def readDarkness(sourceImage, center, radius = 10, percentage = MARK_PERCENT, ma
 
     marked = darks > int(percentage * totals)
 
+    if (logger): logger(f"Circle {center}, darks: {darks}, brights: {brights}, totals: {totals}, darks_threshold: {percentage * totals}")
+
     return mark if marked else unmark
 
-def readCircles(sourceImage, circles, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED):
+def readCircles(sourceImage, circles, percentage = MARK_PERCENT, mark = MARKED, unmark = NOT_MARKED, logger = None):
     result = []
     for i, circle in enumerate(circles):
         radius = circle[2]
         centerX = circle[0]
         centerY = circle[1]
-        result.append(readDarkness(sourceImage, (centerX, centerY), radius))
+        result.append(readDarkness(sourceImage, (centerX, centerY), radius, logger=logger))
 
     return result
 
@@ -181,3 +183,23 @@ def decodeMachineCode(im) :
     print('Data : ', obj.data,'\n')
 
   return decodedObjects
+
+
+def correct_orientation(img):
+
+    h = img.shape[0]
+    w = img.shape[1]
+
+    if (w > h):
+        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        h = img.shape[0]
+        w = img.shape[1]
+        # print('\nRotated 90 degrees')
+
+    summed = np.sum(255-img, axis=0)
+
+    if (np.sum(summed[30:130]) < np.sum(summed[w-130:w-30])):
+        img = cv2.rotate(img, cv2.ROTATE_180)
+        # print('\nRotated 180 degrees')
+
+    return img

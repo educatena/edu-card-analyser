@@ -4,9 +4,7 @@ import numpy as np
 import imutils
 # from skimage import io              # Only needed for web grabbing images; for local images, use cv2.imread(...)
 
-def correct_orientation(img):
-
-    print('\nImage:\n------')
+def correct_orientation(img, logger=None):
 
     h = img.shape[0]
     w = img.shape[1]
@@ -15,13 +13,15 @@ def correct_orientation(img):
         img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
         h = img.shape[0]
         w = img.shape[1]
-        print('\nRotated 90 degrees')
+        if (logger): logger('Rotated img by 90 degrees.', {'width': w, 'height': h})
 
     summed = np.sum(255-img, axis=0)
+    aSum = np.sum(summed[30:130])
+    bSum = np.sum(summed[w-130:w-30])
 
-    if (np.sum(summed[30:130]) < np.sum(summed[w-130:w-30])):
+    if (aSum < bSum):
         img = cv2.rotate(img, cv2.ROTATE_180)
-        print('\nRotated 180 degrees')
+        if (logger): logger('Rotated img by 180 degrees.', {'sum': summed, 'aSum': aSum, 'bSum': bSum, 'equation': 'aSum < bSum'})
 
     return img
 

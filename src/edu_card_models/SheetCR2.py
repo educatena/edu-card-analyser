@@ -1,3 +1,4 @@
+import datetime
 import math
 from operator import itemgetter
 import traceback
@@ -9,6 +10,7 @@ from edu_card_utils.ImageManipulation import getSlice, gustavoBrightnessNormaliz
 from edu_card_utils.OpenCVUtils import getContourDimensions, getLimits, getSquareContourCenter, getSquareContourHeight, getSquareContourWidth, imageHeight
 from edu_card_utils.constants import HEIGHT_FIRST_VERTEX
 from edu_card_utils.coordutils import grid
+from tester3 import correct_orientation
 
 DEBUG = True
 CR2_ANCHOR_HEIGHT_RATIO = 0.017101325352714837
@@ -39,10 +41,18 @@ class SheetCR2():
     questions = None
     name = None
 
+    messages = []
+
     def __init__(self, image, name="test") -> None:
         self.name = name
 
+        self.log(f"Input image dimensions: w={image.shape[1]} h={image.shape[0]}")
+
         # 1. Normalization and Perspective
+
+        image = correct_orientation(image)
+
+        self.log(f"Input image dimensions after rotation correction: w={image.shape[1]} h={image.shape[0]}")
 
         # 1.1 - Get coordinates for perspective transformation
         anchors = self.findAnchors(image)
@@ -76,11 +86,16 @@ class SheetCR2():
         debug = f'{self.name}' if DEBUG is not None else None
 
         contours = findContours(image, debug=debug)
+        self.log(f"Found {len(contours)} contours")
         (squares, tallest) = findSquares(contours, image, debug=debug)
+
+        self.log(f"Found squares by heights: {squares.keys()}")
 
         anchorHeight = int(CR2_ANCHOR_HEIGHT_RATIO * imageHeight(image))
         anchorMinHeight = (anchorHeight * 0.75)
         anchorMaxHeight = (anchorHeight * 1.50)
+
+        self.log(f"Anchor constraints: height: {anchorHeight}, max:{anchorMaxHeight}, min: {anchorMinHeight}")
 
         anchorCandidates = []
 
@@ -89,6 +104,8 @@ class SheetCR2():
             if (height > anchorMinHeight and height < anchorMaxHeight ):
                 for candidate in squares[height]:
                     anchorCandidates = anchorCandidates + [candidate]
+
+        self.log(f"Found {len(anchorCandidates)} anchor candidates", anchorCandidates)
 
         
         threshold = thresholdImage(image, debug=f'anchors_threshold_{debug}' if debug is not None else None, mode=cv2.THRESH_BINARY_INV)
@@ -103,12 +120,16 @@ class SheetCR2():
             center = getSquareContourCenter(candidate)
             # position = self.getAnchorContourCenter(candidate)
 
+            self.log(f"Candidate {center} has a w/h ratio of {ratio}", {'w':width, 'h':height})
+
             isQuadrangular = ratio >= 0.9 and ratio <= 1.5
             isRectangle = ratio >= 1.9 and ratio <= 2.70
             dark = readDarkness(threshold, center, radius=anchorHeight, percentage=0.3)
 
             if (dark == 'X' and isQuadrangular):
                 anchors = anchors + [center]
+            else:
+                self.log(f"Candidate {center} is not fully black or quadrangular, ignored.", candidate)
             # elif (dark == 'X' and isRectangle):
             #     main_anchor = [position]
 
@@ -148,6 +169,8 @@ class SheetCR2():
             for sort_index in sorted_anchors
         ]
 
+        self.log(f"After sorting and grabbing anchors, {anchors} remained.", anchors)
+
         anchors = numpy.float32(anchors)
 
         return anchors
@@ -157,10 +180,14 @@ class SheetCR2():
     def getQRCodeRect(self, anchors):
         transformed = numpy.array(anchors) * REFERENCE_QRPANEL
 
+        self.log("Processed QRCode Rect", transformed)
+
         return transformed.astype(int)
 
     def getQPanelRect(self, anchors):
         transformed = numpy.array(anchors) * REFERENCE_QUESTIONPANEL
+
+        self.log("Processed Question Panel Rect", transformed)
 
         return transformed.astype(int)
 
@@ -193,13 +220,25 @@ class SheetCR2():
 
         circle_radius = math.floor(28/ref_width * real_width)
 
+        self.log("Making options matrix with parameters:", {
+            'real_h': real_height,
+            'real_w': real_width,
+            'ref_h': ref_height,
+            'ref_w': ref_width,
+            'start': start,
+            'panel_count': panel_count,
+            'panel_distance': panel_distance,
+            'circle_center_distance': circle_center_distance,
+            'circle_radius': circle_radius
+        })
+
         gray = image
 
         multiplier = 1
         for panel in range(0, panel_count):
             panel_circles = grid(panel_start, circle_center_distance, 25, 5, z=circle_radius)
 
-            circleMarks = readCircles(gray, panel_circles)
+            circleMarks = readCircles(gray, panel_circles, logger=self.log)
 
             if (DEBUG):
                 debug = gray.copy()
@@ -253,6 +292,7 @@ class SheetCR2():
             qrData = self.qrData
             # information['meta'] = self.meta
 
+            information['logs'] = self.messages
             information['data'] = {
                 'questions': questions,
                 'qr': qrData[0].data.decode('utf8'),
@@ -260,9 +300,14 @@ class SheetCR2():
             }
 
         except Exception as error:
+            information['logs'] = self.messages
             information['error'] = {
                 'message': str(error),
-                'detailed': traceback.format_exc()
+                'detailed': traceback.format_exc(),
             }
         
         return information
+
+    def log(self, message, data = {}):
+        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.messages.append({'message': message, 'data': data, 'datetime': date})

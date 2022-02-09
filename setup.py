@@ -3,7 +3,7 @@ import setuptools
 
 setup(
     name='edu-card-analyser',
-    version='1.2.0',
+    version='1.2.1',
     author='Educatena',
     author_email='tic@educatena.com.br',
     description='Educatena\'s Computer Vision python package for analysing Answer Cards from images.',
