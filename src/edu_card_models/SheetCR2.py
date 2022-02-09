@@ -237,7 +237,7 @@ class SheetCR2():
         for panel in range(0, panel_count):
             panel_circles = grid(panel_start, circle_center_distance, 25, 5, z=circle_radius)
 
-            circleMarks = readCircles(gray, panel_circles, logger=self.log)
+            circleMarks = readCircles(gray, panel_circles)
 
             if (DEBUG):
                 debug = gray.copy()
