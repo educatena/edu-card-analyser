@@ -308,5 +308,5 @@ class SheetCR2():
         return information
 
     def log(self, message, data = {}):
-        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        date = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=-3))).strftime('%Y-%m-%d %H:%M:%S')
         self.messages.append({'message': message, 'data': data.__str__(), 'datetime': date})
