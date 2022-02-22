@@ -36,13 +36,13 @@ NUMBERING_FUNCTION = lambda panel, question: (question + 1) + (QUESTION_PER_PANE
 
 class SheetCR2():
 
-    qrData = None
-    questions = None
-    name = None
-
-    messages = []
-
     def __init__(self, image, name="test") -> None:
+        self.qrData = None
+        self.questions = None
+        self.name = None
+
+        self.messages = []
+
         self.name = name
 
         self.log(f"Input image dimensions: w={image.shape[1]} h={image.shape[0]}")
@@ -308,5 +308,5 @@ class SheetCR2():
         return information
 
     def log(self, message, data = {}):
-        date = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=-3))).strftime('%Y-%m-%d %H:%M:%S')
+        date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.messages.append({'message': message, 'data': data.__str__(), 'datetime': date})
