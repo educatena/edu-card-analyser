@@ -5,7 +5,7 @@ import traceback
 import cv2
 import numpy
 
-from edu_card_utils.ImageIntelligence import correct_orientation, decodeMachineCode, findContours, findSquares, readCircles, readDarkness, readQRCode
+from edu_card_utils.ImageIntelligence import chamithDivakalReadCircles, correct_orientation, decodeMachineCode, findContours, findSquares, readCircles, readDarkness, readQRCode
 from edu_card_utils.ImageManipulation import getSlice, gustavoBrightnessNormalization, perspectiveTransformation, thresholdImage
 from edu_card_utils.OpenCVUtils import getContourDimensions, getLimits, getSquareContourCenter, getSquareContourHeight, getSquareContourWidth, imageHeight
 from edu_card_utils.constants import HEIGHT_FIRST_VERTEX
@@ -179,14 +179,14 @@ class SheetCR2():
     def getQRCodeRect(self, anchors):
         transformed = numpy.array(anchors) * REFERENCE_QRPANEL
 
-        self.log("Processed QRCode Rect", transformed)
+        self.log("Extracted QRCode Rect", transformed)
 
         return transformed.astype(int)
 
     def getQPanelRect(self, anchors):
         transformed = numpy.array(anchors) * REFERENCE_QUESTIONPANEL
 
-        self.log("Processed Question Panel Rect", transformed)
+        self.log("Extracted Question Panel Rect", transformed)
 
         return transformed.astype(int)
 
@@ -233,11 +233,25 @@ class SheetCR2():
 
         gray = image
 
+        panels_circles = None
+
+        for panel in range(0, panel_count):
+            circles = numpy.array(grid(panel_start, circle_center_distance, 25, 5, z=circle_radius), ndmin=3)[0]
+            panels_circles = circles if panel == 0 else numpy.concatenate((panels_circles, circles))
+
+            panel_start[0] += panel_distance[panel]
+
+        option_marks = chamithDivakalReadCircles(panels_circles, image, debug=self.name if DEBUG else None, logger=self.log)
+
         multiplier = 1
         for panel in range(0, panel_count):
-            panel_circles = grid(panel_start, circle_center_distance, 25, 5, z=circle_radius)
+            min = (multiplier * 125) - 125
+            max = min + 125
 
-            circleMarks = readCircles(gray, panel_circles)
+            panel_circles = panels_circles[min:max]
+            circleMarks = option_marks[min:max]
+
+            circleMarks = numpy.where(circleMarks == True, 'X', 'O')
 
             if (DEBUG):
                 debug = gray.copy()
@@ -248,7 +262,6 @@ class SheetCR2():
                 cv2.imwrite(f'debug/{self.name}_circles_{panel}.png', debug)
 
             questions = self.circleMatrix(OPTION_PER_QUESTION, circleMarks)
-            panel_start[0] += panel_distance[panel]
 
             for i, question in enumerate(questions):
                 numberedQuestions[NUMBERING_FUNCTION(multiplier, i)] = question
@@ -270,6 +283,8 @@ class SheetCR2():
 
     def getQRData(self, source):
         readText = decodeMachineCode(source)
+
+        self.log(f'Got QRCode data: {readText}')
         
         return readText
 

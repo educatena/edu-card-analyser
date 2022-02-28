@@ -3,6 +3,7 @@ import random
 import cv2
 import numpy as np
 import pyzbar.pyzbar as pyzbar
+from scipy.signal import convolve2d
 
 from edu_card_utils.ImageManipulation import lukeContrast, maskeShadowless, thresholdImage, unsharp_mask
 from edu_card_utils.OpenCVUtils import contourSlice, getSquareContourHeight, sortContour
@@ -203,3 +204,32 @@ def correct_orientation(img):
         # print('\nRotated 180 degrees')
 
     return img
+
+def chamithDivakalReadCircles(circles, img, logger=None, debug=None):
+
+    cimg = img
+    gimg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    sorted_circles = np.array(circles)
+
+    circle_radius = sorted_circles[...,-1].min()
+    kernel = np.ones((2*circle_radius,2*circle_radius),dtype=int)
+    out0 = convolve2d(255-gimg, kernel,'same')
+    detected_vals = out0[sorted_circles[...,1], sorted_circles[...,0]]
+    detected_vals -= detected_vals.min()
+    max_dark = detected_vals.max()
+    mask = detected_vals > (max_dark * 0.5)
+
+    if (logger): logger(f'CircleReading: The reference darkness is {max_dark} and the threshold is {max_dark * 0.5}')
+
+    for i in range(0, mask.size):
+        # cv2.putText(cimg,str(i),(sorted1[i][0],sorted1[i][1]), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,0,0),1,cv2.LINE_AA)
+        if mask[i]==1:
+            cv2.putText(cimg,"X",(sorted_circles[i][0],sorted_circles[i][1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0,0,255),1,cv2.LINE_AA)
+        else:
+            cv2.putText(cimg,"O",(sorted_circles[i][0],sorted_circles[i][1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(255,0,0),1,cv2.LINE_AA)
+
+    if (debug is not None):
+        cv2.imwrite(f"debug/{debug}_chamith_marks.png", cimg)
+
+    return mask

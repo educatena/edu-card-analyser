@@ -13,7 +13,7 @@ print(os.getcwd())
 bigger = '/home/tetra/Downloads/test.jpeg'
 
 # filePath = '/home/tetra/Downloads/cr2_clean_qrbig.jpg'
-filePath = '/home/tetra/Downloads/2edf9dc750934bd1bc2a2d2a2c7107b2-0001.jpg'
+filePath = '/home/tetra/Downloads/121b6ed1-a8b2-41ad-beb8-f1c08b2a2693.jpeg'
 
 image = cv2.imread(filePath)
 

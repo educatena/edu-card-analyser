@@ -9,8 +9,10 @@ opencv-python = "*"
 twine = "*"
 pytesseract = "*"
 pyzbar = "*"
+scipy = "*"
+matplotlib = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.6.15"
+python_version = "3.7"
