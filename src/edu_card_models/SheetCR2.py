@@ -5,11 +5,12 @@ import traceback
 import cv2
 import numpy
 
-from edu_card_utils.ImageIntelligence import chamithDivakalReadCircles, correct_orientation, decodeMachineCode, findContours, findSquares, readCircles, readDarkness, readQRCode
+from edu_card_utils.ImageIntelligence import chamithDivakalReadCircles, correct_orientation, decodeMachineCode, findContours, findSquares, getImageCornerRects, isContourInsideRect, normalizedImage, readCircles, readDarkness, readQRCode
 from edu_card_utils.ImageManipulation import getSlice, gustavoBrightnessNormalization, perspectiveTransformation, thresholdImage
-from edu_card_utils.OpenCVUtils import getContourDimensions, getLimits, getSquareContourCenter, getSquareContourHeight, getSquareContourWidth, imageHeight
-from edu_card_utils.constants import HEIGHT_FIRST_VERTEX
+from edu_card_utils.OpenCVUtils import drawBoundingRect, drawContourRect, getContourDimensions, getContourRectCenter, getLimits, getSquareContourCenter, getSquareContourHeight, getSquareContourWidth, imageHeight, rectSlice
+from edu_card_utils.constants import HEIGHT_FIRST_VERTEX, MAX_ANCHOR_AREA_PERCENTAGE, MAX_ANCHOR_WIDTH_PERCENTAGE, MIN_ANCHOR_AREA_PERCENTAGE, MIN_ANCHOR_WIDTH_PERCENTAGE
 from edu_card_utils.coordutils import grid
+from edu_nibble_code.NibbleReader import readNibble
 
 DEBUG = True
 CR2_ANCHOR_HEIGHT_RATIO = 0.017101325352714837
@@ -25,10 +26,10 @@ REFERENCE_QRPANEL = numpy.float32([
     [1168.0/1199, 304.0/1599]
 ])
 REFERENCE_QUESTIONPANEL = numpy.float32([
-    [10.0/2549, 1686.0/3509],
-    [2536.0/2549, 1686.0/3509],
-    [10.0/2549, 3400.0/3509],
-    [2536.0/2549, 3400.0/3509]
+    [4.0/1199, 764.0/1599],
+    [1194.0/1199, 764.0/1599],
+    [4.0/1199, 1549.0/1599],
+    [1194.0/1199, 1549.0/1599]
 ])
 OPTION_PER_QUESTION = 5
 QUESTION_PER_PANEL = 25
@@ -49,7 +50,7 @@ class SheetCR2():
 
         # 1. Normalization and Perspective
 
-        image = correct_orientation(image)
+        # image = correct_orientation(image)
 
         self.log(f"Input image dimensions after rotation correction: w={image.shape[1]} h={image.shape[0]}")
 
@@ -84,69 +85,88 @@ class SheetCR2():
     def findAnchors(self, image):
         debug = f'{self.name}' if DEBUG is not None else None
 
-        contours = findContours(image, debug=debug)
+        normalized_image_a = normalizedImage(image, debug)
+        # brightness_normal_image = cv2.equalizeHist(normalized_image_a)
+        threshold_image = thresholdImage(normalized_image_a)
+
+        cv2.imwrite(f'debug/normal.jpg', threshold_image)
+
+        # normal_image = (255 - thresholdImage(normal_image, debug=debug))
+
+        contours = findContours(threshold_image, debug=debug, source=image)
         self.log(f"Found {len(contours)} contours")
         (squares, tallest) = findSquares(contours, image, debug=debug)
 
         self.log(f"Found squares by heights: {squares.keys()}")
 
-        anchorHeight = int(CR2_ANCHOR_HEIGHT_RATIO * imageHeight(image))
-        anchorMinHeight = (anchorHeight * 0.75)
-        anchorMaxHeight = (anchorHeight * 1.50)
-
-        self.log(f"Anchor constraints: height: {anchorHeight}, max:{anchorMaxHeight}, min: {anchorMinHeight}")
+        # self.log(f"Anchor constraints: height: {anchorHeight}, max:{anchorMaxHeight}, min: {anchorMinHeight}")
 
         anchorCandidates = []
 
-        for i, height in enumerate(squares):
-            # print(height, anchorMinHeight, anchorMaxHeight)
-            if (height > anchorMinHeight and height < anchorMaxHeight ):
-                for candidate in squares[height]:
-                    anchorCandidates = anchorCandidates + [candidate]
+        imageWidth = image.shape[1]
+        imageHeight = image.shape[0]
 
+        cornerRects = getImageCornerRects(image)
+
+        quadrantContours = {
+            'top-left': [],
+            'top-right': [],
+            'bottom-left': [],
+            'bottom-right': []
+        }
+
+        imageArea = image.shape[1] * image.shape[0]
+
+        for i, height in enumerate(squares):
+                for candidate in squares[height]:
+
+                    for corner in dict.keys(cornerRects):
+                        dbg_img = None
+                        if (DEBUG): dbg_img = image.copy()
+                        insideRect = isContourInsideRect(candidate, cornerRects[corner], dbg_img)
+                        if (insideRect):
+                            rect = cv2.boundingRect(candidate)
+                            if (rect[2] > 0 and rect[3] > 0):
+                                nibble = rectSlice(image, rect)
+                                w = nibble.shape[1]
+                                h = nibble.shape[0]
+                                if (w > 0 and h > 0):
+                                    code = readNibble(nibble)
+                                    if (code != 0):
+                                        anchorCandidates += [candidate]
+                                        # print('code')
+                                        cv2.imwrite(f'debug/nibble_code_w{w}h{h}_c{code}.jpg', nibble)
+                            # quadrantContours[corner] += [candidate]
+
+
+                    # dimensions = getContourDimensions(candidate)
+                    # candidateWidth = dimensions[0]
+                    # candidateArea = dimensions[0] * dimensions[1]
+                    # areaCoverage = candidateArea / imageArea
+                    # widthCoverage = candidateWidth / imageWidth
+                    # meetsAreaCriteria = areaCoverage >= MIN_ANCHOR_AREA_PERCENTAGE and areaCoverage <= MAX_ANCHOR_AREA_PERCENTAGE
+                    # meetsWidthCriteria = widthCoverage >= MIN_ANCHOR_WIDTH_PERCENTAGE and widthCoverage <= MAX_ANCHOR_WIDTH_PERCENTAGE
+                    # if (meetsAreaCriteria and meetsWidthCriteria):
+                    #     anchorCandidates += [candidate]
+        
         self.log(f"Found {len(anchorCandidates)} anchor candidates", anchorCandidates)
 
-        
-        threshold = thresholdImage(image, debug=f'anchors_threshold_{debug}' if debug is not None else None, mode=cv2.THRESH_BINARY_INV)
-                    
+        cv2.imwrite(f'debug/rect_inside_rect.jpg', dbg_img)
+
 
         anchors = []
-        main_anchor = None
 
         for i, candidate in enumerate(anchorCandidates):
             (width,height) = getContourDimensions(candidate)
+
             ratio = width/height
             center = getSquareContourCenter(candidate)
-            # position = self.getAnchorContourCenter(candidate)
 
             self.log(f"Candidate {center} has a w/h ratio of {ratio}", {'w':width, 'h':height})
 
             isQuadrangular = ratio >= 0.9 and ratio <= 1.5
-            isRectangle = ratio >= 1.9 and ratio <= 2.70
-            dark = readDarkness(threshold, center, radius=anchorHeight, percentage=0.3)
 
-            if (dark == 'X' and isQuadrangular):
-                anchors = anchors + [center]
-            else:
-                self.log(f"Candidate {center} is not fully black or quadrangular, ignored.", candidate)
-            # elif (dark == 'X' and isRectangle):
-            #     main_anchor = [position]
-
-        # if (len(anchors) == 3 and main_anchor is not None):
-        #     m = numpy.int32(main_anchor)
-        #     a = numpy.int32(anchors[0])
-        #     b = numpy.int32(anchors[1])
-        #     c = numpy.int32(anchors[2])
-        #     m_to_a = numpy.linalg.norm(m-a)
-        #     m_to_b = numpy.linalg.norm(m-b)
-        #     m_to_c = numpy.linalg.norm(m-c)
-
-        #     dists = numpy.int32([[0,m_to_a], [1,m_to_b], [2, m_to_c]])
-        #     s_dists = numpy.sort(dists, axis=1)[::-1]
-
-        #     anchors = [anchors[distance[0]] for distance in s_dists]
-
-        #     anchors = main_anchor + anchors
+            if (isQuadrangular): anchors += [center]
 
 
         if debug is not None:
@@ -194,30 +214,30 @@ class SheetCR2():
     def getQuestions(self, image):
         numberedQuestions = {}
 
-        ref_width = 2525
-        ref_height = 1713
+        ref_width = 1189
+        ref_height = 784
         real_height = image.shape[0]
         real_width = image.shape[1]
 
         panel_count = 5
         start = [
-            math.floor(120.0/ref_width * real_width),
-            math.floor(40.0/ref_height * real_height)
+            math.floor(56.0/ref_width * real_width),
+            math.floor(18.0/ref_height * real_height)
         ]
         panel_distance = [
-            math.floor(518/ref_width * real_width),
-            math.floor(515/ref_width * real_width),
-            math.floor(520/ref_width * real_width),
-            math.floor(510/ref_width * real_width),
+            math.floor(245/ref_width * real_width),
+            math.floor(243/ref_width * real_width),
+            math.floor(243/ref_width * real_width),
+            math.floor(241/ref_width * real_width),
             0
         ]
         circle_center_distance = [
-            math.floor(72/ref_width * real_width),
-            math.floor(70/ref_height * real_height)
+            math.floor(33/ref_width * real_width),
+            math.floor(31.7/ref_height * real_height)
         ]
         panel_start = [start[0], start[1]]
 
-        circle_radius = math.floor(28/ref_width * real_width)
+        circle_radius = math.floor(12/ref_width * real_width)
 
         self.log("Making options matrix with parameters:", {
             'real_h': real_height,

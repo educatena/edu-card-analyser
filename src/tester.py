@@ -13,7 +13,18 @@ print(os.getcwd())
 bigger = '/home/tetra/Downloads/test.jpeg'
 
 # filePath = '/home/tetra/Downloads/cr2_clean_qrbig.jpg'
-filePath = '/home/tetra/Downloads/121b6ed1-a8b2-41ad-beb8-f1c08b2a2693.jpeg'
+
+# TEMPLATE > 1.15
+# filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
+
+# CELL NOT WORKING dr > 1.15
+filePath = '/home/tetra/Downloads/edu-code-cell.jpeg'
+
+# SCAN-DARK > 1.15... 0.5 not working
+# filePath = '/home/tetra/Downloads/impressao-sem-brilho.jpeg'
+
+# SCAN-BRIGHT
+# filePath = '/home/tetra/Downloads/impressao-brilho.jpeg'
 
 image = cv2.imread(filePath)
 
@@ -29,10 +40,10 @@ for i in range(0, 1):
 sheets = []
 
 for img in images:
-    try:
+    # try:
         sheets.append(SheetCR2(img[1], f"{img[0]}"))
-    except Exception:
-        print(f'Could not use ratio {img[0]}')
+    # except Exception:
+    #     print(f'Could not use ratio {img[0]}')
 
 
 

@@ -11,6 +11,7 @@ pytesseract = "*"
 pyzbar = "*"
 scipy = "*"
 matplotlib = "*"
+pillow = "*"
 
 [dev-packages]
 

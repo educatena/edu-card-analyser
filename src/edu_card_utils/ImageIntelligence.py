@@ -64,8 +64,8 @@ def normalizedImage(image, debug = None):
 
     return gray
 
-def findContours(source, mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_SIMPLE, debug = None):
-    threshold_image = thresholdImage(normalizedImage(source, debug=debug), debug=debug)
+def findContours(threshold_image, mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_SIMPLE, debug = None, source = None):
+    # threshold_image = thresholdImage(normalizedImage(source, debug=debug), debug=debug)
 
     contours = cv2.findContours(
         threshold_image,
@@ -76,7 +76,7 @@ def findContours(source, mode = cv2.RETR_EXTERNAL, method = cv2.CHAIN_APPROX_SIM
     if contours is not None and len(contours) > 0:
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    if debug is not None:
+    if (debug is not None and source is not None):
         circled = source.copy()
         for contour in contours:
             for point in contour:
@@ -98,7 +98,8 @@ def findSquares(image_contours, image, debug = None):
         perimeter = PERIMETER_ARC * cv2.arcLength(contour, True)
         approximate = cv2.approxPolyDP(contour, perimeter, True)
 
-        if len(approximate) == 4:
+        if len(approximate) >= 4:
+        
             # Lets sort the points so that we have a uniform distribution in x and y
             approximate = sortContour(approximate)
 
@@ -179,9 +180,9 @@ def decodeMachineCode(im) :
   decodedObjects = pyzbar.decode(im)
 
   # Print results
-  for obj in decodedObjects:
-    print('Type : ', obj.type)
-    print('Data : ', obj.data,'\n')
+#   for obj in decodedObjects:
+#     print('Type : ', obj.type)
+#     print('Data : ', obj.data,'\n')
 
   return decodedObjects
 
@@ -233,3 +234,117 @@ def chamithDivakalReadCircles(circles, img, logger=None, debug=None):
         cv2.imwrite(f"debug/{debug}_chamith_marks.png", cimg)
 
     return mask
+
+
+def getImageCornerRects(img, ratio=0.25):
+    w = img.shape[1]
+    h = img.shape[0]
+
+    #cornerwidth
+    cW = math.floor(w * ratio)
+    #cornerheight
+    cH = math.floor(h * ratio)
+
+    #Top-left corner
+    tlC = (0, 0, cW, cH)
+    #Top-right corner
+    trC = (w - cW, 0, cW, cH)
+    #Bottom-left corner
+    blC = (0, h - cH, cW, cH)
+    #Bottom-right corner
+    brC = (w - cW, h - cH, cW, cH)
+
+    return {'top-left': tlC, 'top-right': trC,  'bottom-left': blC, 'bottom-right': brC}
+
+def isContourInsideRect(contour, rect, debug=None):
+    rectA = cv2.boundingRect(contour)
+    rectB = rect
+
+    return isRectInsideRect(rectA, rectB, debug)
+
+def isRectInsideRect(a, b, debug=None):
+    # ax =b[1] + b[3]
+
+    r2 = {
+        'x1': a[0],
+        'y1': a[1],
+        'x2': a[0] + a[2],
+        'y2': a[1] + a[3]
+    }
+
+    r1 = {
+        'x1': b[0],
+        'y1': b[1],
+        'x2': b[0] + b[2],
+        'y2': b[1] + b[3]
+    }
+
+    inside = r1['x1'] < r2['x1'] < r2['x2'] < r1['x2'] and r1['y1'] < r2['y1'] < r2['y2'] < r1['y2']
+
+    if (debug is not None and inside):
+        aid = f'{a[0]-a[1]-a[2]-a[3]}'
+        bid = f'{b[0]-b[1]-b[2]-b[3]}'
+
+        a_color = (0,0,255)
+        b_color = (255,0,0)
+
+        bp1 = (r1['x1'], r1['y1'])
+        bp2 = (r1['x2'], r1['y2'])
+
+        ap1 = (r2['x1'], r2['y1'])
+        ap2 = (r2['x2'], r2['y2'])
+
+        cv2.rectangle(debug, ap1, ap2, a_color, 5, cv2.LINE_AA)
+        cv2.rectangle(debug, bp1, bp2, b_color, 5, cv2.LINE_AA)
+
+    return inside
+
+
+def isRectFilled(img, rect):
+    x = rect[0]
+    y = rect[1]
+    w = rect[2]
+    h = rect[3]
+    center = (x + math.floor(w/2), y + math.floor(h/2))
+    off_center = ()
+
+
+def normalizeLuminance(img):
+
+    # read input
+    image = img
+    hh, ww = image.shape[:2]
+    # max_ = max(hh, ww)
+
+    # illumination normalize
+    ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+
+    # separate channels
+    y, cr, cb = cv2.split(ycrcb)
+
+    # get background which paper says (gaussian blur using standard deviation 5 pixel for 300x300 size image)
+    # account for size of input vs 300
+    # sigma = int(5 * max_ / 300)
+    # kernel = averageBlurKernel(ww, hh)
+    # gaussian = cv2.GaussianBlur(y, kernel, sigma, sigma)
+
+    # subtract background from Y channel
+    # y = (y + 100)
+
+    # merge channels back
+    ycrcb = cv2.merge([y, cr, cb])
+
+    #convert to BGR
+    output = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+
+    return output
+
+def histogram_normal(img):
+    hist,bins = np.histogram(img.flatten(),256,[0,256])
+    cdf = hist.cumsum()
+    cdf_normalized = cdf * float(hist.max()) / cdf.max()
+    cdf_m = np.ma.masked_equal(cdf,0)
+    cdf_m = (cdf_m - cdf_m.min())*255/(cdf_m.max()-cdf_m.min())
+    cdf = np.ma.filled(cdf_m,0).astype('uint8')
+    img2 = cdf[img]
+    return img2
