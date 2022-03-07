@@ -1,8 +1,8 @@
 
 from collections import OrderedDict
-from edu_card_utils.ImageIntelligence import chamithDivakalReadCircles, getImageCornerRects, histogram_normal, normalizeLuminance
+from edu_card_utils.ImageIntelligence import getImageCornerRects
 from edu_card_utils.ImageManipulation import thresholdImage
-from edu_card_utils.OpenCVUtils import drawBoundingRect, getAverageColor, rectSlice
+from edu_card_utils.OpenCVUtils import getAverageColor, rectSlice
 import cv2
 from scipy.signal import convolve2d
 import numpy

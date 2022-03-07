@@ -15,10 +15,10 @@ bigger = '/home/tetra/Downloads/test.jpeg'
 # filePath = '/home/tetra/Downloads/cr2_clean_qrbig.jpg'
 
 # TEMPLATE > 1.15
-# filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
+filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
 
 # CELL NOT WORKING dr > 1.15
-filePath = '/home/tetra/Downloads/edu-code-cell.jpeg'
+# filePath = '/home/tetra/Downloads/edu-code-cell.jpeg'
 
 # SCAN-DARK > 1.15... 0.5 not working
 # filePath = '/home/tetra/Downloads/impressao-sem-brilho.jpeg'

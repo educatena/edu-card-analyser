@@ -263,7 +263,6 @@ def isContourInsideRect(contour, rect, debug=None):
     return isRectInsideRect(rectA, rectB, debug)
 
 def isRectInsideRect(a, b, debug=None):
-    # ax =b[1] + b[3]
 
     r2 = {
         'x1': a[0],
@@ -314,7 +313,6 @@ def normalizeLuminance(img):
     # read input
     image = img
     hh, ww = image.shape[:2]
-    # max_ = max(hh, ww)
 
     # illumination normalize
     ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
@@ -322,16 +320,6 @@ def normalizeLuminance(img):
     # separate channels
     y, cr, cb = cv2.split(ycrcb)
 
-    # get background which paper says (gaussian blur using standard deviation 5 pixel for 300x300 size image)
-    # account for size of input vs 300
-    # sigma = int(5 * max_ / 300)
-    # kernel = averageBlurKernel(ww, hh)
-    # gaussian = cv2.GaussianBlur(y, kernel, sigma, sigma)
-
-    # subtract background from Y channel
-    # y = (y + 100)
-
-    # merge channels back
     ycrcb = cv2.merge([y, cr, cb])
 
     #convert to BGR
