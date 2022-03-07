@@ -196,13 +196,11 @@ def correct_orientation(img):
         img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
         h = img.shape[0]
         w = img.shape[1]
-        # print('\nRotated 90 degrees')
 
     summed = np.sum(255-img, axis=0)
 
     if (np.sum(summed[30:130]) < np.sum(summed[w-130:w-30])):
         img = cv2.rotate(img, cv2.ROTATE_180)
-        # print('\nRotated 180 degrees')
 
     return img
 
@@ -215,11 +213,17 @@ def chamithDivakalReadCircles(circles, img, logger=None, debug=None):
 
     circle_radius = sorted_circles[...,-1].min()
     kernel = np.ones((2*circle_radius,2*circle_radius),dtype=int)
-    out0 = convolve2d(255-gimg, kernel,'same')
+    out0 = convolve2d(255 - gimg, kernel,'same')
     detected_vals = out0[sorted_circles[...,1], sorted_circles[...,0]]
+
     detected_vals -= detected_vals.min()
     max_dark = detected_vals.max()
-    mask = detected_vals > (max_dark * 0.5)
+
+    convolution_image = (out0) / (out0.max() / 255)
+
+    cimage_values = (convolution_image / 3)[sorted_circles[...,1], sorted_circles[...,0]]
+
+    mask = cimage_values > (np.mean(cimage_values) * 1.25) #cimage_values > (cmin * 1.5)
 
     if (logger): logger(f'CircleReading: The reference darkness is {max_dark} and the threshold is {max_dark * 0.5}')
 

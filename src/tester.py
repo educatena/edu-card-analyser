@@ -15,7 +15,7 @@ bigger = '/home/tetra/Downloads/test.jpeg'
 # filePath = '/home/tetra/Downloads/cr2_clean_qrbig.jpg'
 
 # TEMPLATE > 1.15
-filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
+# filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
 
 # CELL NOT WORKING dr > 1.15
 # filePath = '/home/tetra/Downloads/edu-code-cell.jpeg'
@@ -24,15 +24,15 @@ filePath = '/home/tetra/Downloads/7a78ba3ec9214daf8cb96031c72d1b7b-0001.jpg'
 # filePath = '/home/tetra/Downloads/impressao-sem-brilho.jpeg'
 
 # SCAN-BRIGHT
-# filePath = '/home/tetra/Downloads/impressao-brilho.jpeg'
+filePath = '/home/tetra/Downloads/impressao-brilho.jpeg'
 
 image = cv2.imread(filePath)
 
 images = []
 
-ratio = 0.5
+ratio = 1
 
-for i in range(0, 1):
+for i in range(0, 6):
     if (ratio == 4.0): break
     images.append([ratio, cv2.resize(image, (int(image.shape[1] * ratio), int(image.shape[0] * ratio)))])
     ratio += 0.25
@@ -44,7 +44,6 @@ for img in images:
         sheets.append(SheetCR2(img[1], f"{img[0]}"))
     # except Exception:
     #     print(f'Could not use ratio {img[0]}')
-
 
 
 print('done')
