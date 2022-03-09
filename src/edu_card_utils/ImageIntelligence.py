@@ -222,6 +222,8 @@ def chamithDivakalReadCircles(circles, img, logger=None, debug=None):
     convolution_image = (out0) / (out0.max() / 255)
 
     cimage_values = (convolution_image / 3)[sorted_circles[...,1], sorted_circles[...,0]]
+    # cv2.imwrite('debug/convolved2d.png', convolution_image)
+    # cv2.imwrite('debug/convolved2d_circle_vals.png', cimage_values)
 
     mask = cimage_values > (np.mean(cimage_values) * 1.25) #cimage_values > (cmin * 1.5)
 
